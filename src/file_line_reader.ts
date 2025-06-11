@@ -46,10 +46,15 @@ export class FileLineReader {
      * コールバックを受け取り、1行読み込むたびに onLineRead を呼び出す。
      * @param onLineRead 行ごとに実行するコールバック関数
      */
-    async readLinesWithCallback(onLineRead: (line: string) => void): Promise<void> {
+    async load(
+        onLineRead: (line: string) => void,
+        finishCallback: any, 
+        errorCallback: any
+    ): Promise<void> {
         let line: string | null;
         while ((line = await this.readLine()) !== null) {
             onLineRead(line);
         }
+        finishCallback();
     }
 }
