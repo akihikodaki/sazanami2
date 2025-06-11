@@ -11,7 +11,8 @@ class TreeMapCanvasContext {
     height = 0;
     offsetX = 0;                       // horizontal scroll/offset
     offsetY = 0;                       // vertical scroll offset
-    scale = 1;                         // zoom scale
+    scaleX = 1;                        // horizontal zoom scale
+    scaleY = 1;                        // vertical zoom scale
     dataContext: {
         cycles: number[];
         cus: number[];
@@ -49,23 +50,37 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
             draw();
         };
 
-        // Wheel handler: scroll or zoom
+        // Wheel handler: scroll, uniform zoom, or vertical-only zoom
         const handleWheel = (e: WheelEvent) => {
             e.preventDefault();
             const rect = canvas.getBoundingClientRect();
             const mouseX = e.clientX - rect.left;
             const mouseY = e.clientY - rect.top;
             const marginLeft = 50;
+
             if (e.shiftKey) {
-                const prevScale = obj.scale;
+                // uniform zoom
+                const prevX = obj.scaleX;
+                const prevY = obj.scaleY;
                 const factor = e.deltaY < 0 ? 1.1 : 0.9;
-                const newScale = prevScale * factor;
+                const newX = prevX * factor;
+                const newY = prevY * factor;
                 const relX = mouseX - marginLeft + obj.offsetX;
                 const relY = mouseY + obj.offsetY;
-                obj.offsetX = relX * (newScale / prevScale) - (mouseX - marginLeft);
-                obj.offsetY = relY * (newScale / prevScale) - mouseY;
-                obj.scale = newScale;
+                obj.offsetX = relX * (newX / prevX) - (mouseX - marginLeft);
+                obj.offsetY = relY * (newY / prevY) - mouseY;
+                obj.scaleX = newX;
+                obj.scaleY = newY;
+            } else if (e.ctrlKey) {
+                // vertical-only zoom
+                const prevY = obj.scaleY;
+                const factor = e.deltaY < 0 ? 1.1 : 0.9;
+                const newY = prevY * factor;
+                const relY = mouseY + obj.offsetY;
+                obj.offsetY = relY * (newY / prevY) - mouseY;
+                obj.scaleY = newY;
             } else {
+                // vertical scroll
                 obj.offsetY += e.deltaY;
             }
             draw();
@@ -107,7 +122,8 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
         const handleChange = () => {
             const columns = store.loader.columns as ParsedColumns;
             setData(columns);
-            obj.scale = 1;
+            obj.scaleX = 1;
+            obj.scaleY = 1;
             obj.offsetX = 0;
             obj.offsetY = 0;
             draw();
@@ -163,8 +179,13 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
 
     const draw = () => {
         const obj = contextRef.current;
-        const { ctx, width, height, dataContext, offsetX, offsetY, scale } = obj;
-        if (!ctx || !dataContext) return;
+        const { ctx, width, height, dataContext, offsetX, offsetY, scaleX, scaleY } = obj;
+        if (!ctx) return;
+        // always fill background
+        ctx.fillStyle = '#1c1e23';
+        ctx.fillRect(0, 0, width, height);
+        if (!dataContext) return;
+        
         const marginLeft = 50;
         const marginBottom = 20;
         const plotWidth = width - marginLeft;
@@ -177,17 +198,15 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
         const { cycles, cus, wfs, states, maxCycle, maxX } = dataContext;
         const baseScaleX = plotWidth / maxX;
         const baseScaleY = plotHeight / (maxCycle + 1);
-        const scaleX = baseScaleX * scale;
-        const scaleY = baseScaleY * scale;
-        const pxW = Math.max(scaleX, 1);
-        const pxH = Math.max(scaleY, 1);
+        const pxW = Math.max(baseScaleX * scaleX, 1);
+        const pxH = Math.max(baseScaleY * scaleY, 1);
 
         // Draw data
         for (let i = 0; i < cycles.length; i++) {
             const xVal = cus[i] * 8 + wfs[i];
             const yVal = cycles[i];
-            const x = marginLeft + xVal * baseScaleX * scale - offsetX;
-            const y = yVal * baseScaleY * scale - offsetY;
+            const x = marginLeft + xVal * baseScaleX * scaleX - offsetX;
+            const y = yVal * baseScaleY * scaleY - offsetY;
             ctx.fillStyle = getColorForState(states[i]);
             ctx.fillRect(x, y, pxW, pxH);
         }
@@ -202,26 +221,32 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
         ctx.lineTo(width, plotHeight);
         ctx.stroke();
 
-        // Y-axis ticks (cycle count) with zoom-aware spacing
+        // Y-axis ticks and grid
         ctx.fillStyle = '#eee';
         ctx.textAlign = 'right';
         ctx.textBaseline = 'middle';
-        const pixelMinSpacing = 40; // px
-        const rawDataSpacing = pixelMinSpacing / (baseScaleY * scale);
+        const pixelMinSpacing = 40;
+        const rawDataSpacing = pixelMinSpacing / (baseScaleY * scaleY);
         const tickSpacing = niceNum(rawDataSpacing);
         for (let val = 0; val <= maxCycle; val += tickSpacing) {
-            const y = val * baseScaleY * scale - offsetY;
+            const y = val * baseScaleY * scaleY - offsetY;
             if (y < 0 || y > plotHeight) continue;
+            ctx.strokeStyle = '#444';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(marginLeft, y);
+            ctx.lineTo(width, y);
+            ctx.stroke();
             ctx.fillText(val.toString(), marginLeft - 5, y);
         }
 
-        // X-axis ticks (CU+WF)
+        // X-axis ticks
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
         const xLabels = 10;
         for (let i = 0; i <= xLabels; i++) {
             const val = Math.round(maxX * (i / xLabels));
-            const x = marginLeft + val * baseScaleX * scale + (baseScaleX * scale) / 2 - offsetX;
+            const x = marginLeft + val * baseScaleX * scaleX + (baseScaleX * scaleX) / 2 - offsetX;
             ctx.fillText(val.toString(), x, plotHeight + 3);
         }
     };
