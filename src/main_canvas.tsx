@@ -188,7 +188,6 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
         
         const marginLeft = 50;
         const marginBottom = 20;
-        const plotWidth = width - marginLeft;
         const plotHeight = height - marginBottom;
 
         // Background
@@ -196,7 +195,7 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
         ctx.fillRect(0, 0, width, height);
 
         const { cycles, cus, wfs, states, maxCycle, maxX } = dataContext;
-        const baseScaleX = plotWidth / maxX;
+        const baseScaleX = 20; // The width of each unit in the X direction
         const baseScaleY = plotHeight / (maxCycle + 1);
         const pxW = Math.max(baseScaleX * scaleX, 1);
         const pxH = Math.max(baseScaleY * scaleY, 1);
@@ -220,6 +219,11 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
         ctx.moveTo(marginLeft, plotHeight);
         ctx.lineTo(width, plotHeight);
         ctx.stroke();
+
+        // 余白部分を塗りつぶして、プロット要素を隠す
+        ctx.fillStyle = 'rgb(35,38,45)';
+        ctx.fillRect(0, 0, marginLeft, height);
+        ctx.fillRect(0, plotHeight, width, marginBottom);
 
         // Y-axis ticks and grid
         ctx.fillStyle = '#eee';
