@@ -1,8 +1,10 @@
 import {Loader} from "./loader";
 import CanvasRenderer from "./canvas_renderer";
+import { FileLineReader } from "./file_line_reader";
 
 enum ACTION {
     FILE_LOAD,
+    DIALOG_VERSION_OPEN,
     ACTION_END, // 末尾
 };
 
@@ -24,9 +26,16 @@ class Store {
         this.treeMapRenderer_ = new CanvasRenderer();
         this.loader_ = new Loader();
 
-        this.on(ACTION.FILE_LOAD, (inputStr: string) => {
+        this.on(ACTION.FILE_LOAD, (file: File) => {
+            const reader = new FileLineReader(file);
+            this.loader_.load(
+                reader, 
+                () => {},   // finishCallback
+                () => {},   // progressCallback
+                () => {}    // errorCallback
+            );
         });
-
+        this.on(ACTION.DIALOG_VERSION_OPEN, () => { this.trigger(CHANGE.DIALOG_VERSION_OPEN); });
     }
 
 

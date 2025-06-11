@@ -14,11 +14,15 @@ const ToolBar = (props: {store: Store;}) => {
             return;
         }
         
-        // ファイルを読み込む
-        const [fileHandle] = await (window as any).showOpenFilePicker();
-        const file = await fileHandle.getFile();
-        const contents = await file.text();
-        store.trigger(ACTION.FILE_LOAD, contents);   
+         try {
+            // ファイルを読み込む
+            const [fileHandle]: [FileSystemFileHandle] = await (window as any).showOpenFilePicker();
+            const file = await fileHandle.getFile();
+            store.trigger(ACTION.FILE_LOAD, file);
+         }
+         catch (error) {
+            console.error("Error opening file:", error);
+         }
         // console.log(contents); // ファイル内容を表示
     };
 
@@ -26,8 +30,8 @@ const ToolBar = (props: {store: Store;}) => {
     const dispatch = (selectedKey: string|null, event: React.SyntheticEvent<unknown>) => {
         event.preventDefault();    // ページ遷移を防ぐ
         switch (selectedKey) {
-        // case "version":  store.trigger(ACTION.DIALOG_VERSION_OPEN); break;
-        // case "import": openFile(); break;
+        case "menu_version":  store.trigger(ACTION.DIALOG_VERSION_OPEN); break;
+        case "menu_load": openFile(); break;
         // case "set-dark": store.trigger(ACTION.CHANGE_UI_THEME, "dark"); break;
         // case "set-light": store.trigger(ACTION.CHANGE_UI_THEME, "light"); break;
         }
@@ -51,18 +55,18 @@ const ToolBar = (props: {store: Store;}) => {
             <Navbar.Collapse id="responsive-navbar-nav">
             <Nav onSelect={dispatch} activeKey={selectedKey}>
                 <NavDropdown menuVariant={theme} title={<i className="bi bi-list"></i>} id="collapsible-nav-dropdown">
-                    <NavDropdown.Item eventKey="load">
+                    <NavDropdown.Item eventKey="menu_load">
                         Load file
                     </NavDropdown.Item>
-                    <NavDropdown.Divider />
+                    {/* <NavDropdown.Divider />
                     <NavDropdown.Item eventKey="set-dark" active={theme === "dark"}>
                         {theme === "dark" && <i className="bi bi-check"></i>} Dark
                     </NavDropdown.Item>
                     <NavDropdown.Item eventKey="set-light" active={theme === "light"}>
                         {theme === "light" && <i className="bi bi-check"></i>} Light
-                    </NavDropdown.Item>
+                    </NavDropdown.Item> */}
                     <NavDropdown.Divider />
-                    <NavDropdown.Item eventKey="version">
+                    <NavDropdown.Item eventKey="menu_version">
                         Version information
                     </NavDropdown.Item>
                 </NavDropdown>
@@ -70,12 +74,12 @@ const ToolBar = (props: {store: Store;}) => {
             <Nav onSelect={dispatch} activeKey={selectedKey}
                 style={{ color: theme == "dark" ? "#C9CACB" : "#ffffff" }} className="me-auto" // このクラスでリンクが左側に配置される
             >
-                <Nav.Link className="nav-link tool-bar-link" eventKey="zoom-in">
+                {/* <Nav.Link className="nav-link tool-bar-link" eventKey="zoom-in">
                     <i className="bi bi-zoom-in"></i> Zoom In                
                 </Nav.Link>
                 <Nav.Link className="nav-link tool-bar-link" eventKey="zoom-out">
                     <i className="bi bi-zoom-out"></i> Zoom Out                
-                </Nav.Link>
+                </Nav.Link> */}
             </Nav>
             </Navbar.Collapse>
         </Navbar>
@@ -119,7 +123,7 @@ const VersionDialog = (props: {store: Store;}) => {
         <Modal.Header closeButton>
             <Modal.Title>Version Information</Modal.Title>
         </Modal.Header>  
-        <Modal.Body>Sazanami2 Version 0.0.3</Modal.Body>             
+        <Modal.Body>Sazanami2 Version 0.0.1</Modal.Body>             
         </Modal>
     );
 };
