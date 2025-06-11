@@ -17,20 +17,22 @@ enum CHANGE {
 class Store {
     handlers_: { [key: number]: Array<(...args: any[]) => void> } = {};
 
-    loader_: Loader;
+    loader: Loader;
     treeMapRenderer_: CanvasRenderer;
 
     uiTheme: "dark" | "light" = "dark"; // 現在のUIテーマ
 
     constructor() {
         this.treeMapRenderer_ = new CanvasRenderer();
-        this.loader_ = new Loader();
+        this.loader = new Loader();
 
         this.on(ACTION.FILE_LOAD, (file: File) => {
             const reader = new FileLineReader(file);
-            this.loader_.load(
+            this.loader.load(
                 reader, 
-                () => {},   // finishCallback
+                () => {
+                    this.trigger(CHANGE.FILE_LOADED);
+                },   // finishCallback
                 () => {},   // progressCallback
                 () => {}    // errorCallback
             );
