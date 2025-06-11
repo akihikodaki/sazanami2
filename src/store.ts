@@ -5,12 +5,14 @@ import { FileLineReader } from "./file_line_reader";
 enum ACTION {
     FILE_LOAD,
     DIALOG_VERSION_OPEN,
+    DIALOG_HELP_OPEN,
     ACTION_END, // 末尾
 };
 
 enum CHANGE {
     FILE_LOADED = ACTION.ACTION_END+1,
     DIALOG_VERSION_OPEN,
+    DIALOG_HELP_OPEN,
     CHANGE_UI_THEME,
 };
 
@@ -37,7 +39,9 @@ class Store {
                 () => {}    // errorCallback
             );
         });
+
         this.on(ACTION.DIALOG_VERSION_OPEN, () => { this.trigger(CHANGE.DIALOG_VERSION_OPEN); });
+        this.on(ACTION.DIALOG_HELP_OPEN, () => { this.trigger(CHANGE.DIALOG_HELP_OPEN); });
     }
 
 
@@ -50,6 +54,22 @@ class Store {
         }
         this.handlers_[event].push(handler);
         // console.log(`on() is called {event: ${event}, handler: ${handler}}`);
+    }
+
+    off(event: CHANGE|ACTION, handler?: (...args: any[]) => void): void {
+        if (!(event in CHANGE || event in ACTION)) {
+            console.warn(`Unknown event ${event}`);
+            return;
+        }
+        const list = this.handlers_[event];
+        if (!list || list.length === 0) {
+            return;
+        }
+        if (handler) {
+            this.handlers_[event] = list.filter(h => h !== handler);
+        } else {
+            delete this.handlers_[event];
+        }
     }
 
     trigger(event: CHANGE|ACTION, ...args: any[]) {

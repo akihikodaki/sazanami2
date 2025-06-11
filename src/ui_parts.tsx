@@ -32,6 +32,7 @@ const ToolBar = (props: {store: Store;}) => {
         switch (selectedKey) {
         case "menu_version":  store.trigger(ACTION.DIALOG_VERSION_OPEN); break;
         case "menu_load": openFile(); break;
+        case "menu_keyboard_shortcuts": store.trigger(ACTION.DIALOG_HELP_OPEN); break;
         // case "set-dark": store.trigger(ACTION.CHANGE_UI_THEME, "dark"); break;
         // case "set-light": store.trigger(ACTION.CHANGE_UI_THEME, "light"); break;
         }
@@ -65,6 +66,9 @@ const ToolBar = (props: {store: Store;}) => {
                     <NavDropdown.Item eventKey="set-light" active={theme === "light"}>
                         {theme === "light" && <i className="bi bi-check"></i>} Light
                     </NavDropdown.Item> */}
+                    <NavDropdown.Item eventKey="menu_keyboard_shortcuts">
+                        Keyboard shortcuts
+                    </NavDropdown.Item>
                     <NavDropdown.Divider />
                     <NavDropdown.Item eventKey="menu_version">
                         Version information
@@ -128,4 +132,31 @@ const VersionDialog = (props: {store: Store;}) => {
     );
 };
 
-export {ToolBar, StatusBar, VersionDialog};
+const HelpDialog = (props: { store: Store }) => {
+    const [show, setShow] = useState(false);
+    const handleClose = () => setShow(false);
+
+    useEffect(() => {
+        const openListener = () => setShow(true);
+        props.store.on(CHANGE.DIALOG_HELP_OPEN, openListener);
+        return () => {
+            props.store.off(CHANGE.DIALOG_HELP_OPEN, openListener);
+        };
+    }, [props.store]);
+
+    return (
+        <Modal show={show} onHide={handleClose}>
+            <Modal.Header closeButton>
+                <Modal.Title>Help</Modal.Title>
+            </Modal.Header>
+            <Modal.Body>
+                <ul>
+                    <li><kbd>shift + mouse wheel</kbd> zoom in and out.</li>
+                    <li><kbd>ctrl + mouse wheel</kbd> zoom vertically only.</li>
+                </ul>
+            </Modal.Body>
+        </Modal>
+    );
+};
+
+export {ToolBar, StatusBar, VersionDialog, HelpDialog};

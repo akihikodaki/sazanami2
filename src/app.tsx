@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from "react";
 import Store, { ACTION, CHANGE } from "./store";
 
-import {StatusBar, ToolBar, VersionDialog} from "./ui_parts";
+import {StatusBar, ToolBar, VersionDialog, HelpDialog} from "./ui_parts";
 import MainCanvas from "./main_canvas";
 
 import { Modal } from "react-bootstrap";
@@ -23,6 +23,7 @@ const App = () => {
                 <StatusBar store={store}/>
             </div>
             <VersionDialog store={store}/>
+            <HelpDialog store={store}/>
         </div>
     );
 };
