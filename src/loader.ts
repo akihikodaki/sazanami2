@@ -15,7 +15,8 @@ class Loader {
     private columnsArr_: (string | number)[][];  // インデックスアクセス用データ
     private types_: { [column: string]: ColumnType };   // カラムの型
     private statsArr_: ColumnStats[];            // インデックスアクセス用 stats
-    private stringDictArr_: { [value: string]: number }[]; // 文字列辞書
+    private stringDictArr_: { [value: string]: number }[]; // 文字列→インデックス辞書
+    private stringListArr_: string[][];          // インデックス→文字列リスト
 
     // 型検出用
     private rawBuffer_: { [column: string]: string[] };
@@ -33,6 +34,7 @@ class Loader {
         this.types_ = {};
         this.statsArr_ = [];
         this.stringDictArr_ = [];
+        this.stringListArr_ = [];
         this.rawBuffer_ = {};
         this.detection_ = {};
         this.detectionCount_ = 0;
@@ -56,6 +58,7 @@ class Loader {
         this.types_ = {};
         this.statsArr_ = [];
         this.stringDictArr_ = [];
+        this.stringListArr_ = [];
         this.rawBuffer_ = {};
         this.detection_ = {};
         this.detectionCount_ = 0;
@@ -92,6 +95,7 @@ class Loader {
             this.columnsArr_ = values.map(() => []);
             this.statsArr_ = values.map(() => ({ min: Infinity, max: -Infinity }));
             this.stringDictArr_ = values.map(() => ({}));
+            this.stringListArr_ = values.map(() => []);
             values.forEach((header, i) => {
                 this.headerIndex_[header] = i;
                 this.types_[header] = 'string';
@@ -121,8 +125,7 @@ class Loader {
             } else {
                 // 型確定後
                 values.forEach((raw, index) => {
-                    const header = this.headers_[index];
-                    if (this.types_[header] === 'integer') {
+                    if (this.types_[this.headers_[index]] === 'integer') {
                         this.pushIntegerByIndex_(index, raw ?? "");
                     } else {
                         this.pushStringByIndex_(index, raw ?? "");
@@ -170,19 +173,22 @@ class Loader {
 
     /**
      * 文字列を辞書登録し、インデックスを columnsArr_ に追加
-     * @param index カラムインデックス
-     * @param raw   セル文字列
-     * @param keepRawLast 最後の列なら生文字列を保持
      */
     private pushStringByIndex_(index: number, raw: string, keepRawLast: boolean = false): void {
         if (keepRawLast) {
             this.columnsArr_[index].push(raw);
         } else {
             const dict = this.stringDictArr_[index];
-            if (!(raw in dict)) {
-                dict[raw] = Object.keys(dict).length;
+            const list = this.stringListArr_[index];
+            let code: number;
+            if (dict.hasOwnProperty(raw)) {
+                code = dict[raw];
+            } else {
+                code = list.length;
+                dict[raw] = code;
+                list.push(raw);
             }
-            this.columnsArr_[index].push(dict[raw]);
+            this.columnsArr_[index].push(code);
         }
     }
 
@@ -207,6 +213,32 @@ class Loader {
             result[header] = this.statsArr_[i];
         });
         return result;
+    }
+
+    /**
+     * 非末尾文字列列のインデックスから元の文字列を取得
+     */
+    public getOriginalString(column: string, code: number): string {
+        const idx = this.headerIndex_[column];
+        if (idx == null || idx === this.headers_.length - 1) {
+            throw new Error("Original string lookup is only valid for non-last string columns.");
+        }
+        const list = this.stringListArr_[idx];
+        if (code < 0 || code >= list.length) {
+            throw new Error(`Invalid code ${code} for column ${column}`);
+        }
+        return list[code];
+    }
+
+    /**
+     * 辞書としての文字列リストを取得
+     */
+    public getDictionary(column: string): string[] {
+        const idx = this.headerIndex_[column];
+        if (idx == null || idx === this.headers_.length - 1) {
+            throw new Error("Dictionary is only valid for non-last string columns.");
+        }
+        return [...this.stringListArr_[idx]];
     }
 }
 
