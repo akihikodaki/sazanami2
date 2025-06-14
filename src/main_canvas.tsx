@@ -141,10 +141,10 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
     }, [store]);
 
     const setData = (columns: ParsedColumns) => {
-        const cycles = columns["cycle"].map((v) => parseFloat(v));
-        const cus = columns["cu"].map((v) => parseFloat(v));
-        const wfs = columns["wf"].map((v) => parseFloat(v));
-        const states = columns["state"];
+        const cycles = columns["cycle"] as number[];
+        const cus = columns["cu"] as number[];
+        const wfs = columns["wf"] as number[];
+        const states = columns["state"] as string[];
         const maxCycle = Math.max(...cycles);
         const maxCu = Math.max(...cus);
         const maxWf = Math.max(...wfs);
