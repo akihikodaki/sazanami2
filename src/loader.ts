@@ -1,6 +1,7 @@
 import { FileLineReader } from "./file_line_reader";
 
-type ParsedColumns = { [column: string]: (string | number)[] };
+// カラムデータは整数列ならInt32Array、文字列列なら文字列配列
+type ParsedColumns = { [column: string]: Int32Array | string[] };
 type ColumnType = 'integer' | 'string';
 
 interface ColumnStats {
@@ -8,15 +9,24 @@ interface ColumnStats {
     max: number;
 }
 
+// 動的に拡張可能な整数バッファ
+interface IntegerColumnBuffer {
+    buffer: Int32Array;
+    length: number;
+}
+
 class Loader {
-    lineNum = 1;                                 // 読み込んだ行数
-    private headers_: string[];                  // ヘッダー行_
-    private headerIndex_: { [column: string]: number }; // ヘッダー名→インデックス
-    private columnsArr_: (string | number)[][];  // インデックスアクセス用データ
-    private types_: { [column: string]: ColumnType };   // カラムの型
-    private statsArr_: ColumnStats[];            // インデックスアクセス用 stats
-    private stringDictArr_: { [value: string]: number }[]; // 文字列→インデックス辞書
-    private stringListArr_: string[][];          // インデックス→文字列リスト
+    lineNum = 1;
+    private headers_: string[];
+    private headerIndex_: { [column: string]: number };
+
+    // データ保持
+    private columnsArr_: (number[] | IntegerColumnBuffer)[];
+    private lastColumnArr_: string[];
+    private types_: { [column: string]: ColumnType };
+    private statsArr_: ColumnStats[];
+    private stringDictArr_: { [value: string]: number }[];
+    private stringListArr_: string[][];
 
     // 型検出用
     private rawBuffer_: { [column: string]: string[] };
@@ -25,12 +35,14 @@ class Loader {
     private detectionDone_: boolean;
     private static readonly TYPE_DETECT_COUNT = 100;
     private static readonly REPORT_INTERVAL = 1024 * 256;
+    private static readonly INITIAL_CAPACITY = 1024;
 
     constructor() {
         this.lineNum = 1;
         this.headers_ = [];
         this.headerIndex_ = {};
         this.columnsArr_ = [];
+        this.lastColumnArr_ = [];
         this.types_ = {};
         this.statsArr_ = [];
         this.stringDictArr_ = [];
@@ -41,20 +53,18 @@ class Loader {
         this.detectionDone_ = false;
     }
 
-    /**
-     * TSVファイルを読み込み、各列を配列としてcolumns_に格納
-     */
     load(
         reader: FileLineReader,
         finishCallback: () => void,
         progressCallback: (lineNum: number, line: string) => void,
         errorCallback: (error: any, lineNum: number) => void
     ) {
-        // リセット
+        // 初期化
         this.lineNum = 1;
         this.headers_ = [];
         this.headerIndex_ = {};
         this.columnsArr_ = [];
+        this.lastColumnArr_ = [];
         this.types_ = {};
         this.statsArr_ = [];
         this.stringDictArr_ = [];
@@ -90,9 +100,9 @@ class Loader {
     ): void {
         const values = line.split("\t");
         if (this.lineNum === 1) {
-            // ヘッダー行設定
             this.headers_ = values;
-            this.columnsArr_ = values.map(() => []);
+            this.columnsArr_ = values.map(() => [] as number[]);
+            this.lastColumnArr_ = [];
             this.statsArr_ = values.map(() => ({ min: Infinity, max: -Infinity }));
             this.stringDictArr_ = values.map(() => ({}));
             this.stringListArr_ = values.map(() => []);
@@ -112,30 +122,32 @@ class Loader {
                 );
                 return;
             }
+            const lastIdx = this.headers_.length - 1;
             if (!this.detectionDone_) {
                 this.detectionCount_++;
                 values.forEach((raw, index) => {
-                    const header = this.headers_[index];
-                    this.detectTypePhase_(header, raw ?? "");
+                    this.detectTypePhase_(this.headers_[index], raw ?? "");
                 });
                 if (this.detectionCount_ === Loader.TYPE_DETECT_COUNT) {
                     this.finalizeTypes_();
                     this.detectionDone_ = true;
                 }
             } else {
-                // 型確定後
                 values.forEach((raw, index) => {
-                    if (this.types_[this.headers_[index]] === 'integer') {
-                        this.pushIntegerByIndex_(index, raw ?? "");
+                    const header = this.headers_[index];
+                    const val = raw ?? "";
+                    if (index === lastIdx) {
+                        this.lastColumnArr_.push(val);
+                    } else if (this.types_[header] === 'integer') {
+                        this.pushIntegerByIndex_(index, val);
                     } else {
-                        this.pushStringByIndex_(index, raw ?? "");
+                        this.pushStringByIndex_(index, val);
                     }
                 });
             }
         }
     }
 
-    /** 型検出フェーズのロジック */
     private detectTypePhase_(header: string, value: string): void {
         this.rawBuffer_[header].push(value);
         const isHex = /^0[xX][0-9A-Fa-f]+$/.test(value);
@@ -145,68 +157,84 @@ class Loader {
         }
     }
 
-    /** 型検出終了時に buffer 反映 */
     private finalizeTypes_(): void {
         const lastIdx = this.headers_.length - 1;
         this.headers_.forEach((header, index) => {
             const type = this.detection_[header];
             this.types_[header] = type;
+            if (index === lastIdx) {
+                this.lastColumnArr_ = [];
+            } else if (type === 'integer') {
+                this.columnsArr_[index] = { buffer: new Int32Array(Loader.INITIAL_CAPACITY), length: 0 };
+            } else {
+                this.columnsArr_[index] = [] as number[];
+            }
             this.rawBuffer_[header].forEach(val => {
-                if (type === 'integer') {
+                if (index === lastIdx) {
+                    this.lastColumnArr_.push(val);
+                } else if (type === 'integer') {
                     this.pushIntegerByIndex_(index, val);
                 } else {
-                    this.pushStringByIndex_(index, val, index === lastIdx);
+                    this.pushStringByIndex_(index, val);
                 }
             });
             delete this.rawBuffer_[header];
         });
     }
 
-    /** 整数値を columnsArr_ と statsArr_ に追加 */
     private pushIntegerByIndex_(index: number, raw: string): void {
         const num = /^0[xX]/.test(raw) ? parseInt(raw, 16) : parseInt(raw, 10);
-        this.columnsArr_[index].push(num);
+        const col = this.columnsArr_[index] as IntegerColumnBuffer;
+        if (col.length >= col.buffer.length) {
+            const newBuffer = new Int32Array(col.buffer.length * 2);
+            newBuffer.set(col.buffer);
+            col.buffer = newBuffer;
+        }
+        col.buffer[col.length] = num;
+        col.length++;
         const stat = this.statsArr_[index];
         if (num < stat.min) stat.min = num;
         if (num > stat.max) stat.max = num;
     }
 
-    /**
-     * 文字列を辞書登録し、インデックスを columnsArr_ に追加
-     */
-    private pushStringByIndex_(index: number, raw: string, keepRawLast: boolean = false): void {
-        if (keepRawLast) {
-            this.columnsArr_[index].push(raw);
+    private pushStringByIndex_(index: number, raw: string): void {
+        const col = this.columnsArr_[index] as number[];
+        const dict = this.stringDictArr_[index];
+        const list = this.stringListArr_[index];
+        let code: number;
+        if (dict.hasOwnProperty(raw)) {
+            code = dict[raw];
         } else {
-            const dict = this.stringDictArr_[index];
-            const list = this.stringListArr_[index];
-            let code: number;
-            if (dict.hasOwnProperty(raw)) {
-                code = dict[raw];
-            } else {
-                code = list.length;
-                dict[raw] = code;
-                list.push(raw);
-            }
-            this.columnsArr_[index].push(code);
+            code = list.length;
+            dict[raw] = code;
+            list.push(raw);
         }
+        col.push(code);
     }
 
-    /** 全カラムのデータを取得（オブジェクト形式） */
     public get columns(): ParsedColumns {
         const result: ParsedColumns = {};
         this.headers_.forEach((header, i) => {
-            result[header] = this.columnsArr_[i];
+            const lastIdx = this.headers_.length - 1;
+            if (i === lastIdx) {
+                result[header] = this.lastColumnArr_.slice();
+            } else if (this.types_[header] === 'integer') {
+                const col = this.columnsArr_[i] as IntegerColumnBuffer;
+                const intArr = col.buffer.subarray(0, col.length);
+                result[header] = intArr;
+            } else {
+                const codes = this.columnsArr_[i] as number[];
+                const list = this.stringListArr_[i];
+                result[header] = codes.map(code => list[code]);
+            }
         });
         return result;
     }
 
-    /** カラムの型情報を取得 */
     public get types(): { [column: string]: ColumnType } {
         return this.types_;
     }
 
-    /** カラムの min/max 情報を取得 */
     public get stats(): { [column: string]: ColumnStats } {
         const result: { [column: string]: ColumnStats } = {};
         this.headers_.forEach((header, i) => {
@@ -215,9 +243,6 @@ class Loader {
         return result;
     }
 
-    /**
-     * 非末尾文字列列のインデックスから元の文字列を取得
-     */
     public getOriginalString(column: string, code: number): string {
         const idx = this.headerIndex_[column];
         if (idx == null || idx === this.headers_.length - 1) {
@@ -226,13 +251,10 @@ class Loader {
         const list = this.stringListArr_[idx];
         if (code < 0 || code >= list.length) {
             throw new Error(`Invalid code ${code} for column ${column}`);
-        }
+        };
         return list[code];
     }
 
-    /**
-     * 辞書としての文字列リストを取得
-     */
     public getDictionary(column: string): string[] {
         const idx = this.headerIndex_[column];
         if (idx == null || idx === this.headers_.length - 1) {

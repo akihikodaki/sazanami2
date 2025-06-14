@@ -14,10 +14,10 @@ class TreeMapCanvasContext {
     scaleX = 1;                        // horizontal zoom scale
     scaleY = 1;                        // vertical zoom scale
     dataContext: {
-        cycles: number[];
-        cus: number[];
-        wfs: number[];
-        states: number[];
+        cycles: Int32Array;
+        cus: Int32Array;
+        wfs: Int32Array;
+        states: Int32Array;
         maxCycle: number;
         maxWf: number;
         maxX: number;
@@ -144,10 +144,10 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
         const columns: ParsedColumns = loader.columns;
         const stats = loader.stats;
 
-        const cycles = columns["cycle"] as number[];
-        const cus = columns["cu"] as number[];
-        const wfs = columns["wf"] as number[];
-        const states = columns["state"] as number[];
+        const cycles = columns["cycle"] as Int32Array;
+        const cus = columns["cu"] as Int32Array;
+        const wfs = columns["wf"] as Int32Array;
+        const states = columns["state"] as Int32Array;
         const maxCycle = stats["cycle"].max;
         const maxCu = stats["cu"].max;
         const maxWf = stats["wf"].max;
