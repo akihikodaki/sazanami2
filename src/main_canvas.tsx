@@ -17,12 +17,12 @@ class TreeMapCanvasContext {
         cycles: number[];
         cus: number[];
         wfs: number[];
-        states: string[];
+        states: number[];
         maxCycle: number;
         maxWf: number;
         maxX: number;
     } | null = null;
-    stateColorMap: Map<string, string> = new Map();
+    stateColorMap: Map<number, string> = new Map();
 }
 
 const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
@@ -147,7 +147,7 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
         const cycles = columns["cycle"] as number[];
         const cus = columns["cu"] as number[];
         const wfs = columns["wf"] as number[];
-        const states = columns["state"] as string[];
+        const states = columns["state"] as number[];
         const maxCycle = stats["cycle"].max;
         const maxCu = stats["cu"].max;
         const maxWf = stats["wf"].max;
@@ -168,7 +168,7 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
         return niceFraction * base;
     };
 
-    const getColorForState = (stateVal: string): string => {
+    const getColorForState = (stateVal: number): string => {
         const obj = contextRef.current;
         if (obj.stateColorMap.has(stateVal)) {
             return obj.stateColorMap.get(stateVal)!;
