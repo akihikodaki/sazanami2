@@ -4,6 +4,7 @@ import Store, { ACTION, CHANGE } from "./store";
 
 import {Nav, Navbar, NavDropdown, Form, FormControl} from "react-bootstrap";
 import { Modal } from "react-bootstrap";
+import { BsList } from 'react-icons/bs';
 
 const ToolBar = (props: {store: Store;}) => {
     let store = props.store;
@@ -55,7 +56,7 @@ const ToolBar = (props: {store: Store;}) => {
             <Navbar.Toggle aria-controls="responsive-navbar-nav" />
             <Navbar.Collapse id="responsive-navbar-nav">
             <Nav onSelect={dispatch} activeKey={selectedKey}>
-                <NavDropdown menuVariant={theme} title={<i className="bi bi-list"></i>} id="collapsible-nav-dropdown">
+                <NavDropdown menuVariant={theme} title={<BsList size={20}/>} id="collapsible-nav-dropdown">
                     <NavDropdown.Item eventKey="menu_load">
                         Load file
                     </NavDropdown.Item>
