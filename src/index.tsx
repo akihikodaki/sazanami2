@@ -10,6 +10,9 @@ import { createRoot } from "react-dom/client";
 import "./styles.css";
 import 'bootstrap/dist/css/bootstrap.min.css';
 
+// react-icons 経由でアイコンをインポートすると，webpack でのビルド時に必要なアイコンのみがバンドルされるため，ここではアイコンを読まない
+
+
 // App コンポーネント
 import App from "./app";    
 

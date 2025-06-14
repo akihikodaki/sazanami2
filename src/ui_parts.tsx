@@ -4,7 +4,10 @@ import Store, { ACTION, CHANGE } from "./store";
 
 import {Nav, Navbar, NavDropdown, Form, FormControl} from "react-bootstrap";
 import { Modal } from "react-bootstrap";
+
+// react-icons 経由でアイコンをインポートすると，webpack でのビルド時に必要なアイコンのみがバンドルされる
 import { BsList } from 'react-icons/bs';
+
 
 const ToolBar = (props: {store: Store;}) => {
     let store = props.store;
