@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from "react";
 import Store, { ACTION, CHANGE } from "./store";
-import { ParsedColumns } from "./loader";
+import { Loader, ParsedColumns } from "./loader";
 
 /**
  * Context holding canvas rendering state and loaded data
@@ -19,6 +19,7 @@ class TreeMapCanvasContext {
         wfs: number[];
         states: string[];
         maxCycle: number;
+        maxWf: number;
         maxX: number;
     } | null = null;
     stateColorMap: Map<string, string> = new Map();
@@ -120,8 +121,7 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
 
         // Store change handler
         const handleChange = () => {
-            const columns = store.loader.columns as ParsedColumns;
-            setData(columns);
+            setData(store.loader);
             obj.scaleX = 1;
             obj.scaleY = 1;
             obj.offsetX = 0;
@@ -140,16 +140,19 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
         };
     }, [store]);
 
-    const setData = (columns: ParsedColumns) => {
+    const setData = (loader: Loader) => {
+        const columns: ParsedColumns = loader.columns;
+        const stats = loader.stats;
+
         const cycles = columns["cycle"] as number[];
         const cus = columns["cu"] as number[];
         const wfs = columns["wf"] as number[];
         const states = columns["state"] as string[];
-        const maxCycle = Math.max(...cycles);
-        const maxCu = Math.max(...cus);
-        const maxWf = Math.max(...wfs);
-        const maxX = maxCu * 8 + maxWf + 1;
-        contextRef.current.dataContext = { cycles, cus, wfs, states, maxCycle, maxX };
+        const maxCycle = stats["cycle"].max;
+        const maxCu = stats["cu"].max;
+        const maxWf = stats["wf"].max;
+        const maxX = maxCu * maxWf + 1;
+        contextRef.current.dataContext = { cycles, cus, wfs, states, maxCycle, maxWf, maxX };
     };
 
     // Compute a "nice" number >= x
@@ -194,7 +197,7 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
         ctx.fillStyle = '#1c1e23';
         ctx.fillRect(0, 0, width, height);
 
-        const { cycles, cus, wfs, states, maxCycle, maxX } = dataContext;
+        const { cycles, cus, wfs, states, maxCycle, maxWf, maxX } = dataContext;
         const baseScaleX = 20; // The width of each unit in the X direction
         const baseScaleY = plotHeight / (maxCycle + 1);
         const pxW = Math.max(baseScaleX * scaleX, 1);
@@ -202,7 +205,7 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
 
         // Draw data
         for (let i = 0; i < cycles.length; i++) {
-            const xVal = cus[i] * 8 + wfs[i];
+            const xVal = cus[i] * (1 + maxWf) + wfs[i];
             const yVal = cycles[i];
             const x = marginLeft + xVal * baseScaleX * scaleX - offsetX;
             const y = yVal * baseScaleY * scaleY - offsetY;
