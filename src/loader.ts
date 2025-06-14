@@ -20,8 +20,8 @@ class Loader {
     private headers_: string[];
     private headerIndex_: { [column: string]: number };
 
-    // データ保持
-    private columnsArr_: (number[] | IntegerColumnBuffer)[];
+    // データ保持: 常にIntegerColumnBuffer（最終列は別管理）
+    private columnsArr_: IntegerColumnBuffer[];
     private lastColumnArr_: string[];
     private types_: { [column: string]: ColumnType };
     private statsArr_: ColumnStats[];
@@ -100,8 +100,11 @@ class Loader {
     ): void {
         const values = line.split("\t");
         if (this.lineNum === 1) {
+            // ヘッダー行設定
             this.headers_ = values;
-            this.columnsArr_ = values.map(() => [] as number[]);
+            const lastIdx = values.length - 1;
+            // 全てIntegerColumnBufferで初期化
+            this.columnsArr_ = values.map((_, i) => ({ buffer: new Int32Array(Loader.INITIAL_CAPACITY), length: 0 }));
             this.lastColumnArr_ = [];
             this.statsArr_ = values.map(() => ({ min: Infinity, max: -Infinity }));
             this.stringDictArr_ = values.map(() => ({}));
@@ -115,9 +118,7 @@ class Loader {
         } else {
             if (values.length > this.headers_.length) {
                 errorCallback(
-                    new Error(
-                        `Expected ${this.headers_.length} columns, but got ${values.length}`
-                    ),
+                    new Error(`Expected ${this.headers_.length} columns, but got ${values.length}`),
                     this.lineNum
                 );
                 return;
@@ -139,9 +140,10 @@ class Loader {
                     if (index === lastIdx) {
                         this.lastColumnArr_.push(val);
                     } else if (this.types_[header] === 'integer') {
-                        this.pushIntegerByIndex_(index, val);
+                        this.pushBufferValue_(index, val);
                     } else {
-                        this.pushStringByIndex_(index, val);
+                        // 文字列列も数値コードで格納
+                        this.pushStringCode_(index, val);
                     }
                 });
             }
@@ -162,43 +164,40 @@ class Loader {
         this.headers_.forEach((header, index) => {
             const type = this.detection_[header];
             this.types_[header] = type;
-            if (index === lastIdx) {
-                this.lastColumnArr_ = [];
-            } else if (type === 'integer') {
-                this.columnsArr_[index] = { buffer: new Int32Array(Loader.INITIAL_CAPACITY), length: 0 };
-            } else {
-                this.columnsArr_[index] = [] as number[];
-            }
+            // last column handled separately
+            // rawBufferからデータをバッファへ反映
             this.rawBuffer_[header].forEach(val => {
                 if (index === lastIdx) {
                     this.lastColumnArr_.push(val);
                 } else if (type === 'integer') {
-                    this.pushIntegerByIndex_(index, val);
+                    this.pushBufferValue_(index, val);
                 } else {
-                    this.pushStringByIndex_(index, val);
+                    this.pushStringCode_(index, val);
                 }
             });
             delete this.rawBuffer_[header];
         });
     }
 
-    private pushIntegerByIndex_(index: number, raw: string): void {
+    /** Int32Array bufferに数値を追加 (整数・16進 or 10進) */
+    private pushBufferValue_(index: number, raw: string): void {
         const num = /^0[xX]/.test(raw) ? parseInt(raw, 16) : parseInt(raw, 10);
-        const col = this.columnsArr_[index] as IntegerColumnBuffer;
+        const col = this.columnsArr_[index];
         if (col.length >= col.buffer.length) {
-            const newBuffer = new Int32Array(col.buffer.length * 2);
-            newBuffer.set(col.buffer);
-            col.buffer = newBuffer;
+            const newBuf = new Int32Array(col.buffer.length * 2);
+            newBuf.set(col.buffer);
+            col.buffer = newBuf;
         }
         col.buffer[col.length] = num;
         col.length++;
+        // stats更新
         const stat = this.statsArr_[index];
         if (num < stat.min) stat.min = num;
         if (num > stat.max) stat.max = num;
     }
 
-    private pushStringByIndex_(index: number, raw: string): void {
-        const col = this.columnsArr_[index] as number[];
+    /** 文字列をコード化してbufferに追加 */
+    private pushStringCode_(index: number, raw: string): void {
         const dict = this.stringDictArr_[index];
         const list = this.stringListArr_[index];
         let code: number;
@@ -209,23 +208,35 @@ class Loader {
             dict[raw] = code;
             list.push(raw);
         }
-        col.push(code);
+        // bufferに追加
+        const col = this.columnsArr_[index];
+        if (col.length >= col.buffer.length) {
+            const newBuf = new Int32Array(col.buffer.length * 2);
+            newBuf.set(col.buffer);
+            col.buffer = newBuf;
+        }
+        col.buffer[col.length] = code;
+        col.length++;
     }
 
     public get columns(): ParsedColumns {
         const result: ParsedColumns = {};
+        const lastIdx = this.headers_.length - 1;
         this.headers_.forEach((header, i) => {
-            const lastIdx = this.headers_.length - 1;
             if (i === lastIdx) {
                 result[header] = this.lastColumnArr_.slice();
             } else if (this.types_[header] === 'integer') {
-                const col = this.columnsArr_[i] as IntegerColumnBuffer;
-                const intArr = col.buffer.subarray(0, col.length);
-                result[header] = intArr;
+                const col = this.columnsArr_[i];
+                result[header] = col.buffer.subarray(0, col.length);
             } else {
-                const codes = this.columnsArr_[i] as number[];
+                // 文字列列はコードを文字列へ変換
+                const col = this.columnsArr_[i];
                 const list = this.stringListArr_[i];
-                result[header] = codes.map(code => list[code]);
+                const out: string[] = [];
+                for (let j = 0; j < col.length; j++) {
+                    out.push(list[col.buffer[j]]);
+                }
+                result[header] = out;
             }
         });
         return result;
@@ -251,7 +262,7 @@ class Loader {
         const list = this.stringListArr_[idx];
         if (code < 0 || code >= list.length) {
             throw new Error(`Invalid code ${code} for column ${column}`);
-        };
+        }
         return list[code];
     }
 
