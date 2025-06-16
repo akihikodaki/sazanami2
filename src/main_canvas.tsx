@@ -22,6 +22,10 @@ class CanvasContext {
         maxWf: number;
         maxX: number;
     } | null = null;
+
+    // 描画されたピクセルのインデックスを保持
+    // マウスオーバー時に使用
+    drawnIndex: Int32Array | null = null; 
 }
 
 const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
@@ -47,6 +51,7 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
             ctx.scale(dpr, dpr);
             obj.width = width;
             obj.height = height;
+            obj.drawnIndex = new Int32Array(width * height);
             draw();
         };
 
@@ -150,8 +155,9 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
         const maxCycle = stats["cycle"].max;
         const maxCu = stats["cu"].max;
         const maxWf = stats["wf"].max;
-        const maxX = maxCu * maxWf + 1;
-        contextRef.current.dataContext = { cycles, cus, wfs, states, maxCycle, maxWf, maxX };
+        const ctx = contextRef.current;
+        // set data context and grid dimensions
+        ctx.dataContext = { cycles, cus, wfs, states, maxCycle, maxWf, maxX };
     };
 
     // Compute a "nice" number >= x
@@ -176,12 +182,12 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
 
     const draw = () => {
         const obj = contextRef.current;
-        const { ctx, width, height, dataContext, offsetX, offsetY, scaleX, scaleY } = obj;
+        const { ctx, width, height, dataContext, offsetX, offsetY, scaleX, scaleY, drawnIndex: recordedStates } = obj;
         if (!ctx) return;
         // always fill background
         ctx.fillStyle = '#1c1e23';
         ctx.fillRect(0, 0, width, height);
-        if (!dataContext) return;
+        if (!dataContext || !recordedStates) return;
         
         const marginLeft = 50;
         const marginBottom = 20;
@@ -190,6 +196,7 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
         // Background
         ctx.fillStyle = '#1c1e23';
         ctx.fillRect(0, 0, width, height);
+        recordedStates.fill(-1); // Reset recorded states
 
         const { cycles, cus, wfs, states, maxCycle, maxWf, maxX } = dataContext;
         const baseScaleX = 20; // The width of each unit in the X direction
@@ -197,7 +204,7 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
         const pxW = Math.max(baseScaleX * scaleX, 1);
         const pxH = Math.max(baseScaleY * scaleY, 1);
 
-        // Draw data
+        // Draw data and record states by cell index
         for (let i = 0; i < cycles.length; i++) {
             const xVal = cus[i] * (1 + maxWf) + wfs[i];
             const yVal = cycles[i];
@@ -205,6 +212,9 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
             const y = yVal * baseScaleY * scaleY - offsetY;
             ctx.fillStyle = getColorForState(states[i]);
             ctx.fillRect(x, y, pxW, pxH);
+            
+            const cellIndex = yVal * obj.width + xVal;
+            recordedStates[cellIndex] = i;
         }
 
         // Axes
