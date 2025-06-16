@@ -155,6 +155,7 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
         const maxCycle = stats["cycle"].max;
         const maxCu = stats["cu"].max;
         const maxWf = stats["wf"].max;
+        const maxX = (maxCu + 1) * (maxWf + 1);
         const ctx = contextRef.current;
         // set data context and grid dimensions
         ctx.dataContext = { cycles, cus, wfs, states, maxCycle, maxWf, maxX };
@@ -254,9 +255,8 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
         // X-axis ticks
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
-        const xLabels = 10;
-        for (let i = 0; i <= xLabels; i++) {
-            const val = Math.round(maxX * (i / xLabels));
+        for (let i = 0; i < maxX; i++) {
+            const val = i;
             const x = marginLeft + val * baseScaleX * scaleX + (baseScaleX * scaleX) / 2 - offsetX;
             ctx.fillText(val.toString(), x, plotHeight + 3);
         }
