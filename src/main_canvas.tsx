@@ -5,7 +5,7 @@ import { Loader, ParsedColumns } from "./loader";
 /**
  * Context holding canvas rendering state and loaded data
  */
-class TreeMapCanvasContext {
+class CanvasContext {
     ctx!: CanvasRenderingContext2D;
     width = 0;
     height = 0;
@@ -26,7 +26,7 @@ class TreeMapCanvasContext {
 }
 
 const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
-    const contextRef = useRef<TreeMapCanvasContext>(new TreeMapCanvasContext());
+    const contextRef = useRef<CanvasContext>(new CanvasContext());
     const divRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
