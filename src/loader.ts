@@ -224,19 +224,10 @@ class Loader {
         const lastIdx = this.headers_.length - 1;
         this.headers_.forEach((header, i) => {
             if (i === lastIdx) {
-                result[header] = this.lastColumnArr_.slice();
-            } else if (this.types_[header] === 'integer') {
-                const col = this.columnsArr_[i];
-                result[header] = col.buffer.subarray(0, col.length);
-            } else {
-                // 文字列列はコードを文字列へ変換
-                const col = this.columnsArr_[i];
-                const list = this.stringListArr_[i];
-                const out: string[] = [];
-                for (let j = 0; j < col.length; j++) {
-                    out.push(list[col.buffer[j]]);
-                }
-                result[header] = out;
+                result[header] = this.lastColumnArr_;
+            }
+            else {
+                result[header] = this.columnsArr_[i].buffer;
             }
         });
         return result;
