@@ -22,7 +22,6 @@ class CanvasContext {
         maxWf: number;
         maxX: number;
     } | null = null;
-    stateColorMap: Map<number, string> = new Map();
 }
 
 const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
@@ -169,14 +168,9 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
     };
 
     const getColorForState = (stateVal: number): string => {
-        const obj = contextRef.current;
-        if (obj.stateColorMap.has(stateVal)) {
-            return obj.stateColorMap.get(stateVal)!;
-        }
-        const idx = obj.stateColorMap.size;
+        const idx = stateVal;
         const hue = (idx * 137.508) % 360;
         const color = `hsl(${hue},70%,50%)`;
-        obj.stateColorMap.set(stateVal, color);
         return color;
     };
 
