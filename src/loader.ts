@@ -245,6 +245,12 @@ class Loader {
         return result;
     }
 
+    public get numRows(): number {
+        // this.lineNum は次に読み込まれる行番号なので、
+        // 実際に読み込んだ行数は lineNum - 1
+        return this.lineNum - 1;
+    }
+
     public getOriginalString(column: string, code: number): string {
         const idx = this.headerIndex_[column];
         if (idx == null || idx === this.headers_.length - 1) {
@@ -264,6 +270,7 @@ class Loader {
         }
         return [...this.stringListArr_[idx]];
     }
+
 }
 
 export { Loader, ParsedColumns, ColumnType };

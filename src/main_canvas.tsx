@@ -289,22 +289,36 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
         const baseScaleX = 20;
         const baseScaleY = plotHeight / (maxCycle + 1);
 
-        // ● 可視セル数を計算
+        // 可視セル数を計算
         const visibleCols = Math.ceil((width - marginLeft) / (baseScaleX * scaleX));
         const visibleRows = Math.ceil(plotHeight     / (baseScaleY * scaleY));
 
-        // ● グリッドの左上が何番目のデータか
+        // グリッドの左上が何番目のデータか
         const xStart = Math.floor((offsetX - marginLeft) / (baseScaleX * scaleX));
         const yStart = Math.floor(offsetY                   / (baseScaleY * scaleY));
 
-        // ● 新しい解像度で記録配列を初期化（全要素を -1 で埋める）
+        // 新しい解像度で記録配列を初期化（全要素を -1 で埋める）
         obj.drawnIndex = new Int32Array(visibleCols * visibleRows).fill(-1);
 
         const pxW = Math.max(baseScaleX * scaleX, 1);
         const pxH = Math.max(baseScaleY * scaleY, 1);
 
-        // ● データ描画＆インデックス記録
-        for (let i = 0; i < cycles.length; i++) {
+        const lowerBound = (arr: Int32Array, length: number, target: number): number => {
+            let lo = 0, hi = length;
+            while (lo < hi) {
+                const mid = (lo + hi) >>> 1;
+                if (arr[mid] < target) lo = mid + 1;
+                else hi = mid;
+            }
+            return lo;
+        };
+        // cycles の単調性を活かして、可視範囲の cycle 値レンジに対応するインデックスを探す
+        const numRows = store.loader.numRows;
+        const startIdx = lowerBound(cycles, numRows, yStart);
+        const endIdx   = lowerBound(cycles, numRows, yStart + visibleRows - 1);        
+
+        // データ描画＆インデックス記録
+        for (let i = startIdx; i < endIdx; i++) {
             const xVal = cus[i] * (maxWf + 1) + wfs[i];
             const yVal = cycles[i];
 
@@ -313,7 +327,7 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
             ctx.fillStyle = getColorForState(states[i]);
             ctx.fillRect(x, y, pxW, pxH);
 
-            // ● 可視範囲内のセルだけ記録
+            // 可視範囲内のセルだけ記録
             const col = xVal - xStart;
             const row = yVal - yStart;
             if (col >= 0 && col < visibleCols && row >= 0 && row < visibleRows) {
