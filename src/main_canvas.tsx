@@ -139,43 +139,25 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
             const visibleCols = Math.ceil((obj.width - marginLeft) / (baseScaleX * obj.scaleX));
             const visibleRows = Math.ceil(plotHeight         / (baseScaleY * obj.scaleY));
 
-            // 表示開始セル（データ座標系で左上が何番目か）
+            // 最大解像度制限
+            const MAX_RES = 128;
+            const gridCols = Math.min(visibleCols, MAX_RES);
+            const gridRows = Math.min(visibleRows, MAX_RES);
+
             const xStart = Math.floor((obj.offsetX - marginLeft) / (baseScaleX * obj.scaleX));
-            const yStart = Math.floor(obj.offsetY                   / (baseScaleY * obj.scaleY));
+            const yStart = Math.floor(obj.offsetY / (baseScaleY * obj.scaleY));
 
-            // データ空間上のセル座標
             const xVal = Math.floor((mouseX - marginLeft + obj.offsetX) / (baseScaleX * obj.scaleX));
-            const yVal = Math.floor((mouseY + obj.offsetY)            / (baseScaleY * obj.scaleY));
-
-            // visible-grid 内でのローカル col,row
+            const yVal = Math.floor((mouseY + obj.offsetY) / (baseScaleY * obj.scaleY));
             const col = xVal - xStart;
             const row = yVal - yStart;
 
             let recordIndex = -1;
-            if (
-                col >= 0 && col < visibleCols &&
-                row >= 0 && row < visibleRows
-            ) {
-                const cellIndex = row * visibleCols + col;
+            if (col >= 0 && col < visibleCols && row >= 0 && row < visibleRows) {
+                const gridCol = Math.floor(col * gridCols / visibleCols);
+                const gridRow = Math.floor(row * gridRows / visibleRows);
+                const cellIndex = gridRow * gridCols + gridCol;
                 recordIndex = obj.drawnIndex[cellIndex] ?? -1;
-
-                // recordIndex が -1 のとき、上下4の周囲も探す
-                if (recordIndex < 0) {
-                    for (let dy = -4; dy <= 4; dy++) {
-                        if (dy === 0) 
-                            continue;
-                        const nc = col;
-                        const nr = row + dy;
-                        if (nc < 0 || nc >= visibleCols || nr < 0 || nr >= visibleRows) 
-                            continue;
-                        const nIdx = nr * visibleCols + nc;
-                        const candidate = obj.drawnIndex[nIdx];
-                        if (candidate >= 0) {
-                            recordIndex = candidate;
-                            break;
-                        }
-                    }
-                }
             }
 
             // 全 columns を走査して "列名: 値, " の文字列を組み立て
@@ -273,14 +255,14 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
 
     const draw = () => {
         const obj = contextRef.current;
-        const { ctx, width, height, dataContext, offsetX, offsetY, scaleX, scaleY, } = obj;
+        const { ctx, width, height, dataContext, offsetX, offsetY, scaleX, scaleY } = obj;
         if (!ctx) return;
+
         // 背景クリア
         ctx.fillStyle = '#1c1e23';
         ctx.fillRect(0, 0, width, height);
 
         if (!dataContext) return;
-
         const marginLeft = 50;
         const marginBottom = 20;
         const plotHeight = height - marginBottom;
@@ -289,20 +271,21 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
         const baseScaleX = 20;
         const baseScaleY = plotHeight / (maxCycle + 1);
 
-        // 可視セル数を計算
+        // 表示セル数
         const visibleCols = Math.ceil((width - marginLeft) / (baseScaleX * scaleX));
-        const visibleRows = Math.ceil(plotHeight     / (baseScaleY * scaleY));
+        const visibleRows = Math.ceil(plotHeight / (baseScaleY * scaleY));
 
-        // グリッドの左上が何番目のデータか
-        const xStart = Math.floor((offsetX - marginLeft) / (baseScaleX * scaleX));
-        const yStart = Math.floor(offsetY                   / (baseScaleY * scaleY));
+        // グリッドの上限を設定
+        const MAX_RES = 128;
+        const gridCols = Math.min(visibleCols, MAX_RES);
+        const gridRows = Math.min(visibleRows, MAX_RES);
 
-        // 新しい解像度で記録配列を初期化（全要素を -1 で埋める）
-        obj.drawnIndex = new Int32Array(visibleCols * visibleRows).fill(-1);
-
+        // データ描画用ピクセルサイズ
         const pxW = Math.max(baseScaleX * scaleX, 1);
         const pxH = Math.max(baseScaleY * scaleY, 1);
 
+        // 描画セルの start/end インデックス
+        const numRows = store.loader.numRows;
         const lowerBound = (arr: Int32Array, length: number, target: number): number => {
             let lo = 0, hi = length;
             while (lo < hi) {
@@ -312,26 +295,31 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
             }
             return lo;
         };
-        // cycles の単調性を活かして、可視範囲の cycle 値レンジに対応するインデックスを探す
-        const numRows = store.loader.numRows;
+        const xStart = Math.floor((offsetX - marginLeft) / (baseScaleX * scaleX));
+        const yStart = Math.floor(offsetY / (baseScaleY * scaleY));
         const startIdx = lowerBound(cycles, numRows, yStart);
-        const endIdx   = lowerBound(cycles, numRows, yStart + visibleRows - 1);        
+        const endIdx   = lowerBound(cycles, numRows, yStart + visibleRows - 1);
+
+        // drawnIndex を gridCols × gridRows で初期化
+        obj.drawnIndex = new Int32Array(gridCols * gridRows).fill(-1);
 
         // データ描画＆インデックス記録
         for (let i = startIdx; i < endIdx; i++) {
             const xVal = cus[i] * (maxWf + 1) + wfs[i];
             const yVal = cycles[i];
-
             const x = marginLeft + xVal * baseScaleX * scaleX - offsetX;
-            const y = yVal * baseScaleY * scaleY       - offsetY;
+            const y = yVal * baseScaleY * scaleY - offsetY;
             ctx.fillStyle = getColorForState(states[i]);
             ctx.fillRect(x, y, pxW, pxH);
 
-            // 可視範囲内のセルだけ記録
+            // visible 範囲内なら、grid 上のセルに記録
             const col = xVal - xStart;
             const row = yVal - yStart;
             if (col >= 0 && col < visibleCols && row >= 0 && row < visibleRows) {
-                const cellIndex = row * visibleCols + col;
+                // 大きい解像度を小さい grid にマップ
+                const gridCol = Math.floor(col * gridCols / visibleCols);
+                const gridRow = Math.floor(row * gridRows / visibleRows);
+                const cellIndex = gridRow * gridCols + gridCol;
                 obj.drawnIndex[cellIndex] = i;
             }
         }
