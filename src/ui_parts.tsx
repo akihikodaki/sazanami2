@@ -103,6 +103,9 @@ const StatusBar = (props: {store: Store;}) => {
         store.on(CHANGE.CHANGE_UI_THEME, () => {
             setTheme(store.uiTheme);
         });
+        store.on(CHANGE.MOUSE_MOVE, (message: string) => {
+            setStatusBarMessage(message);
+        });
     }, []);
 
     return (

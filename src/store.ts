@@ -6,6 +6,7 @@ enum ACTION {
     FILE_LOAD,
     DIALOG_VERSION_OPEN,
     DIALOG_HELP_OPEN,
+    MOUSE_MOVE,
     ACTION_END, // 末尾
 };
 
@@ -13,6 +14,7 @@ enum CHANGE {
     FILE_LOADED = ACTION.ACTION_END+1,
     DIALOG_VERSION_OPEN,
     DIALOG_HELP_OPEN,
+    MOUSE_MOVE,
     CHANGE_UI_THEME,
 };
 
@@ -42,6 +44,7 @@ class Store {
 
         this.on(ACTION.DIALOG_VERSION_OPEN, () => { this.trigger(CHANGE.DIALOG_VERSION_OPEN); });
         this.on(ACTION.DIALOG_HELP_OPEN, () => { this.trigger(CHANGE.DIALOG_HELP_OPEN); });
+        this.on(ACTION.MOUSE_MOVE, (str) => { this.trigger(CHANGE.MOUSE_MOVE, str); });
     }
 
 
