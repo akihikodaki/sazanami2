@@ -2,7 +2,7 @@ import { FileLineReader } from "./file_line_reader";
 
 // カラムデータは整数列ならInt32Array、文字列列なら文字列配列
 type ParsedColumns = { [column: string]: Int32Array | string[] };
-type ColumnType = 'integer' | 'string';
+type ColumnType = 'integer' | 'string' | 'raw_string';
 
 interface ColumnStats {
     min: number;
@@ -127,7 +127,7 @@ class Loader {
             if (!this.detectionDone_) {
                 this.detectionCount_++;
                 values.forEach((raw, index) => {
-                    this.detectTypePhase_(this.headers_[index], raw ?? "");
+                    this.detectTypePhase_(this.headers_[index], raw ?? "", index == lastIdx);
                 });
                 if (this.detectionCount_ === Loader.TYPE_DETECT_COUNT) {
                     this.finalizeTypes_();
@@ -150,12 +150,12 @@ class Loader {
         }
     }
 
-    private detectTypePhase_(header: string, value: string): void {
+    private detectTypePhase_(header: string, value: string, last: boolean): void {
         this.rawBuffer_[header].push(value);
         const isHex = /^0[xX][0-9A-Fa-f]+$/.test(value);
         const isInt = /^-?\d+$/.test(value);
         if (this.detection_[header] === 'integer' && !isHex && !isInt) {
-            this.detection_[header] = 'string';
+            this.detection_[header] = last ? 'raw_string' : 'string';
         }
     }
 

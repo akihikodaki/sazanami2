@@ -161,12 +161,23 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
             // 全 columns を走査して "列名: 値, " の文字列を組み立て
             let payload = "";
             if (recordIndex >= 0) {
-                const cols = store.loader.columns;  // ParsedColumns 型
-                payload = Object.entries(cols)
-                .map(([key, arr]) => `${key}: ${(arr as Int32Array)[recordIndex]}`)
-                .join(", ")
-                + ", ";
+                const cols = store.loader.columns;    // ParsedColumns 型
+                const types = store.loader.types;     // 各列の型情報
+                payload = Object.keys(cols).map((colName) => {
+                    const arr = cols[colName] as Int32Array;
+                    let value: string | number;
+                    if (types[colName] === "string") {
+                        // string 型列は、配列に格納されている整数値を渡す
+                        const codeValue = arr[recordIndex];
+                        value = store.loader.getOriginalString(colName, codeValue);
+                    } else {
+                        // 数値列は配列から直接
+                        value = arr[recordIndex];
+                    }
+                    return `${colName}: ${value}`;
+                }).join(", ") + ", ";
             }
+
             store.trigger(ACTION.MOUSE_MOVE, payload);
         };
 
