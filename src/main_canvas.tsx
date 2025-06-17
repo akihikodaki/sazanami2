@@ -280,9 +280,12 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
         const gridCols = Math.min(visibleCols, MAX_RES);
         const gridRows = Math.min(visibleRows, MAX_RES);
 
+        // 1ピクセルに描画される論理高さ
+        const ratioY = 1 / (baseScaleY * scaleY); 
+
         // データ描画用ピクセルサイズ
-        const pxW = Math.max(baseScaleX * scaleX, 0.5);
-        const pxH = Math.max(baseScaleY * scaleY, 0.5);
+        const pxW = Math.max(baseScaleX * scaleX, ratioY > 32 ? 0.5 : 1);
+        const pxH = Math.max(baseScaleY * scaleY, ratioY > 32 ? 0.5 : 1);
 
         // 描画セルの start/end インデックス
         const numRows = store.loader.numRows;
@@ -303,10 +306,8 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
         // drawnIndex を gridCols × gridRows で初期化
         obj.drawnIndex = new Int32Array(gridCols * gridRows).fill(-1);
 
-        // 1ピクセルに描画される論理高さ
-        const ratioY = 1 / (baseScaleY * scaleY); 
+        // 描画まびき
         const step = Math.max(1, Math.floor(ratioY / 32));
-
         if (ratioY >= 32) {
             ctx.fillStyle = "hsl(0,0%,70%)";
         }
