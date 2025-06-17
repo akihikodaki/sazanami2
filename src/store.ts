@@ -38,7 +38,9 @@ class Store {
                     this.trigger(CHANGE.FILE_LOADED);
                 },   // finishCallback
                 () => {},   // progressCallback
-                () => {}    // errorCallback
+                (err) => {
+                    console.error(`Error loading file: ${err}`);
+                }    // errorCallback
             );
         });
 
