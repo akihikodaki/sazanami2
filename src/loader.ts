@@ -16,7 +16,9 @@ interface IntegerColumnBuffer {
 }
 
 class Loader {
-    lineNum = 1;
+    private lineNum: number;
+    private numWarning: number;
+
     private headers_: string[];
     private headerIndex_: { [column: string]: number };
 
@@ -39,6 +41,7 @@ class Loader {
 
     constructor() {
         this.lineNum = 1;
+        this.numWarning = 0;
         this.headers_ = [];
         this.headerIndex_ = {};
         this.columnsArr_ = [];
@@ -98,7 +101,7 @@ class Loader {
         line: string,
         errorCallback: (error: any, lineNum: number) => void
     ): void {
-        const values = line.split("\t");
+        let values = line.split("\t");
         if (this.lineNum === 1) {
             // ヘッダー行設定
             this.headers_ = values;
@@ -117,11 +120,14 @@ class Loader {
             });
         } else {
             if (values.length > this.headers_.length) {
-                errorCallback(
-                    new Error(`Expected ${this.headers_.length} columns, but got ${values.length}`),
-                    this.lineNum
-                );
-                return;
+                this.numWarning++;
+                if (this.numWarning <= 10) {
+                    errorCallback(
+                        new Error(`Line:${this.lineNum} Expected ${this.headers_.length} columns, but got ${values.length}`),
+                        this.lineNum
+                    );
+                    values = values.slice(0, this.headers_.length);
+                }
             }
             const lastIdx = this.headers_.length - 1;
             if (!this.detectionDone_) {
