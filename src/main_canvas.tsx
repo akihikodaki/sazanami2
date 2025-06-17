@@ -76,21 +76,23 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
                 obj.offsetY = relY * (newY / prevY) - mouseY;
                 obj.scaleX = newX;
                 obj.scaleY = newY;
+
             } else if (e.ctrlKey) {
-                // vertical-only zoom
-                const prevY = obj.scaleY;
+                // horizontal-only zoom
+                const prevX = obj.scaleX;
                 const factor = e.deltaY < 0 ? 1.1 : 0.9;
-                const newY = prevY * factor;
-                const relY = mouseY + obj.offsetY;
-                obj.offsetY = relY * (newY / prevY) - mouseY;
-                obj.scaleY = newY;
+                const newX = prevX * factor;
+                const relX = mouseX - marginLeft + obj.offsetX;
+                obj.offsetX = relX * (newX / prevX) - (mouseX - marginLeft);
+                obj.scaleX = newX;
+
             } else {
                 // vertical scroll
                 obj.offsetY += e.deltaY;
             }
+
             draw();
         };
-
         // Drag handlers for panning
         let isDragging = false;
         let lastX = 0;

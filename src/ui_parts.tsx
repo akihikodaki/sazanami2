@@ -159,7 +159,7 @@ const HelpDialog = (props: { store: Store }) => {
             <Modal.Body>
                 <ul>
                     <li><kbd>shift + mouse wheel</kbd> zoom in and out.</li>
-                    <li><kbd>ctrl + mouse wheel</kbd> zoom vertically only.</li>
+                    <li><kbd>ctrl + mouse wheel</kbd> zoom horizontal only.</li>
                 </ul>
             </Modal.Body>
         </Modal>
