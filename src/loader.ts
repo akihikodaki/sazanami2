@@ -126,8 +126,8 @@ class Loader {
                         new Error(`Line:${this.lineNum} Expected ${this.headers_.length} columns, but got ${values.length}`),
                         this.lineNum
                     );
-                    values = values.slice(0, this.headers_.length);
                 }
+                values = values.slice(0, this.headers_.length);
             }
             const lastIdx = this.headers_.length - 1;
             if (!this.detectionDone_) {
