@@ -158,6 +158,24 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
             ) {
                 const cellIndex = row * visibleCols + col;
                 recordIndex = obj.drawnIndex[cellIndex] ?? -1;
+
+                // recordIndex が -1 のとき、上下4の周囲も探す
+                if (recordIndex < 0) {
+                    for (let dy = -4; dy <= 4; dy++) {
+                        if (dy === 0) 
+                            continue;
+                        const nc = col;
+                        const nr = row + dy;
+                        if (nc < 0 || nc >= visibleCols || nr < 0 || nr >= visibleRows) 
+                            continue;
+                        const nIdx = nr * visibleCols + nc;
+                        const candidate = obj.drawnIndex[nIdx];
+                        if (candidate >= 0) {
+                            recordIndex = candidate;
+                            break;
+                        }
+                    }
+                }
             }
 
             // 全 columns を走査して "列名: 値, " の文字列を組み立て
