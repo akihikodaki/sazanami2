@@ -118,7 +118,7 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
             }
 
             if (!obj.dataContext || !obj.drawnIndex) {
-                store.trigger(ACTION.MOUSE_MOVE, "-1");
+                store.trigger(ACTION.MOUSE_MOVE, "");
                 return;
             }
 
@@ -281,8 +281,8 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
         const gridRows = Math.min(visibleRows, MAX_RES);
 
         // データ描画用ピクセルサイズ
-        const pxW = Math.max(baseScaleX * scaleX, 1);
-        const pxH = Math.max(baseScaleY * scaleY, 1);
+        const pxW = Math.max(baseScaleX * scaleX, 0.5);
+        const pxH = Math.max(baseScaleY * scaleY, 0.5);
 
         // 描画セルの start/end インデックス
         const numRows = store.loader.numRows;
@@ -298,23 +298,38 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
         const xStart = Math.floor((offsetX - marginLeft) / (baseScaleX * scaleX));
         const yStart = Math.floor(offsetY / (baseScaleY * scaleY));
         const startIdx = lowerBound(cycles, numRows, yStart);
-        const endIdx   = lowerBound(cycles, numRows, yStart + visibleRows - 1);
+        const endIdx   = Math.min(lowerBound(cycles, numRows, yStart + visibleRows - 1), numRows);
 
         // drawnIndex を gridCols × gridRows で初期化
         obj.drawnIndex = new Int32Array(gridCols * gridRows).fill(-1);
 
+        // 1ピクセルに描画される論理高さ
+        const ratioY = 1 / (baseScaleY * scaleY); 
+        const step = Math.max(1, Math.floor(ratioY / 32));
+
+        if (ratioY >= 32) {
+            ctx.fillStyle = "hsl(0,0%,70%)";
+        }
+
         // データ描画＆インデックス記録
-        for (let i = startIdx; i < endIdx; i++) {
+        for (let i = startIdx; i < endIdx; i += step) {
+            if (cycles[i] == 0) {
+                continue;
+            }
+
             const xVal = cus[i] * (maxWf + 1) + wfs[i];
             const yVal = cycles[i];
             const x = marginLeft + xVal * baseScaleX * scaleX - offsetX;
             const y = yVal * baseScaleY * scaleY - offsetY;
-            ctx.fillStyle = getColorForState(states[i]);
+            if (ratioY < 32) {
+                ctx.fillStyle = getColorForState(states[i]);
+            }
             ctx.fillRect(x, y, pxW, pxH);
 
             // visible 範囲内なら、grid 上のセルに記録
             const col = xVal - xStart;
             const row = yVal - yStart;
+
             if (col >= 0 && col < visibleCols && row >= 0 && row < visibleRows) {
                 // 大きい解像度を小さい grid にマップ
                 const gridCol = Math.floor(col * gridCols / visibleCols);
