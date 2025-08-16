@@ -1,4 +1,5 @@
 import { FileLineReader } from "./file_line_reader";
+import { GetDataView, DataViewIF } from "./data_view";
 
 // カラムデータは整数列ならInt32Array、文字列列なら文字列配列
 type ParsedColumns = { [column: string]: Int32Array | string[] };
@@ -277,6 +278,9 @@ class Loader {
         return [...this.stringListArr_[idx]];
     }
 
+    public GetDataView(): DataViewIF {
+        return GetDataView(this);
+    }
 }
 
-export { Loader, ParsedColumns, ColumnType };
+export { Loader, ParsedColumns, ColumnType, DataViewIF };

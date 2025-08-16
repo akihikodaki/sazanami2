@@ -76,7 +76,7 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
                 return;
             }
 
-            if (!renderCtx.dataContext || !renderCtx.drawnIndex) {
+            if (!renderCtx.dataView || !renderCtx.drawnIndex) {
                 store.trigger(ACTION.MOUSE_MOVE, "");
                 return;
             }
