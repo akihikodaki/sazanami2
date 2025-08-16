@@ -1,6 +1,70 @@
 import Store, { ACTION, CHANGE } from "./store";
 import { Loader, ParsedColumns } from "./loader";
 
+class DataContext {
+    cycles_ = new Int32Array();
+    cus_ = new Int32Array();
+    wfs_ = new Int32Array();
+    states_ = new Int32Array();
+    maxCycle_ = 0;
+    maxWf_ = 0;
+    maxCu_ = 0;
+    maxX_ = 0;
+    numRows_ = 0; // 行数
+
+    init(loader: Loader) {
+        const columns: ParsedColumns = loader.columns;
+        const stats = loader.stats;
+
+        this.cycles_ = columns["cycle"] as Int32Array;
+        this.cus_ = columns["cu"] as Int32Array;
+        this.wfs_ = columns["wf"] as Int32Array;
+        this.states_ = columns["state"] as Int32Array;
+
+        this.maxCu_ = stats["cu"].max;
+        this.maxWf_ = stats["wf"].max;
+
+        this.maxX_ = (this.maxCu_ + 1) * (this.maxWf_ + 1);
+        this.maxCycle_ = stats["cycle"].max;
+
+        this.numRows_ = loader.numRows;
+    }
+
+    getX(i: number): number {
+        return this.cus_[i] * (this.maxWf_ + 1) + this.wfs_[i];
+    };
+    getY(i: number): number { 
+        return  this.cycles_[i]; 
+    }
+    getState(i: number): number {
+        return this.states_[i];  
+    }
+
+    lowerBound_(arr: Int32Array, length: number, target: number): number {
+        let lo = 0, hi = length;
+        while (lo < hi) {
+            const mid = (lo + hi) >>> 1;
+            if (arr[mid] < target) lo = mid + 1;
+            else hi = mid;
+        }
+        return lo;
+    };
+    getStartIdx = (yStart: number): number => {
+        return this.lowerBound_(this.cycles_, this.numRows_, yStart);
+    }
+    getEndIdx = (yEnd: number): number => {
+        return Math.min(this.lowerBound_(this.cycles_, this.numRows_, yEnd), this.numRows_);
+    }
+
+    getMaxX(): number {
+        return this.maxX_;
+    }
+    getMaxY(): number {
+        return this.maxCycle_;
+    }
+
+};
+
 /**
  * Context holding canvas rendering state and loaded data
  */
@@ -11,10 +75,7 @@ class RendererContext {
     offsetX = 0;                       // horizontal scroll/offset
     offsetY = 0;                       // vertical scroll offset
 
-    /**
-     * スケールは対数で保持し、実数値は getter で展開する。
-     * scale = exp(scaleLog)
-     */
+    // スケール対数
     scaleXLog = 0;                     // horizontal zoom scale (log)
     scaleYLog = 0;                     // vertical zoom scale (log)
 
@@ -23,15 +84,7 @@ class RendererContext {
 
     numRows = 0;                       // number of rows in the data
 
-    dataContext: {
-        cycles: Int32Array;
-        cus: Int32Array;
-        wfs: Int32Array;
-        states: Int32Array;
-        maxCycle: number;
-        maxWf: number;
-        maxX: number;
-    } | null = null;
+    dataContext = new DataContext();
 
     // 描画されたピクセルのインデックスを保持
     // マウスオーバー時に使用
@@ -42,29 +95,15 @@ class CanvasRenderer {
     MARGIN_LEFT_ = 50;
     MARGIN_BOTTOM_ = 20;
     BASE_SCALE_X_ = 20;
-
-    /**
-     * 1ステップあたりの対数ズーム量（従来の 1.1 倍/0.9 倍に相当）
-     */
-    ZOOM_STEP_LOG_ = Math.log(1.1);
+    ZOOM_STEP_LOG_ = Math.log(1.1); // 対数ズーム量
 
     constructor() {}
 
     initRendererContext(ctx: RendererContext, loader: Loader) {
-        const columns: ParsedColumns = loader.columns;
-        const stats = loader.stats;
-
-        const cycles = columns["cycle"] as Int32Array;
-        const cus = columns["cu"] as Int32Array;
-        const wfs = columns["wf"] as Int32Array;
-        const states = columns["state"] as Int32Array;
-
-        const maxCycle = stats["cycle"].max;
-        const maxCu = stats["cu"].max;
-        const maxWf = stats["wf"].max;
-        const maxX = (maxCu + 1) * (maxWf + 1);
         // set data context and grid dimensions
-        ctx.dataContext = { cycles, cus, wfs, states, maxCycle, maxWf, maxX };
+        let dataContext = new DataContext();
+        dataContext.init(loader);
+        ctx.dataContext = dataContext;
 
         // スケールは対数で 0 (= 1.0) に初期化
         ctx.scaleXLog = 0;
@@ -142,9 +181,7 @@ class CanvasRenderer {
 
         if (!dataContext) return;
         const plotHeight = height - this.MARGIN_BOTTOM_;
-        const { cycles, cus, wfs, states, maxCycle, maxWf, maxX } = dataContext;
-
-        const baseScaleY = plotHeight / (maxCycle + 1);
+        const baseScaleY = plotHeight / (dataContext.getMaxY() + 1);
 
         // 表示セル数
         const visibleCols = Math.ceil((width - this.MARGIN_LEFT_) / (this.BASE_SCALE_X_ * scaleX));
@@ -163,20 +200,10 @@ class CanvasRenderer {
         const pxH = Math.max(baseScaleY * scaleY, ratioY > 32 ? 0.5 : 1);
 
         // 描画セルの start/end インデックス
-        const numRows = renderCtx.numRows;
-        const lowerBound = (arr: Int32Array, length: number, target: number): number => {
-            let lo = 0, hi = length;
-            while (lo < hi) {
-                const mid = (lo + hi) >>> 1;
-                if (arr[mid] < target) lo = mid + 1;
-                else hi = mid;
-            }
-            return lo;
-        };
         const xStart = Math.floor((offsetX - this.MARGIN_LEFT_) / (this.BASE_SCALE_X_ * scaleX));
         const yStart = Math.floor(offsetY / (baseScaleY * scaleY));
-        const startIdx = lowerBound(cycles, numRows, yStart);
-        const endIdx   = Math.min(lowerBound(cycles, numRows, yStart + visibleRows - 1), numRows);
+        const startIdx = dataContext.getStartIdx(yStart);
+        const endIdx   = dataContext.getEndIdx(yStart + visibleRows - 1);
 
         // drawnIndex を gridCols × gridRows で初期化
         renderCtx.drawnIndex = new Int32Array(gridCols * gridRows).fill(-1);
@@ -189,16 +216,15 @@ class CanvasRenderer {
 
         // データ描画＆インデックス記録
         for (let i = startIdx; i < endIdx; i += step) {
-            if (cycles[i] == 0) {
+            const yVal = dataContext.getY(i);
+            if (yVal == 0) {
                 continue;
             }
-
-            const xVal = cus[i] * (maxWf + 1) + wfs[i];
-            const yVal = cycles[i];
+            const xVal = dataContext.getX(i);
             const x = this.MARGIN_LEFT_ + xVal * this.BASE_SCALE_X_ * scaleX - offsetX;
             const y = yVal * baseScaleY * scaleY - offsetY;
             if (ratioY < 32) {
-                canvasCtx.fillStyle = this.getColorForState_(states[i]);
+                canvasCtx.fillStyle = this.getColorForState_(dataContext.getState(i));
             }
             canvasCtx.fillRect(x, y, pxW, pxH);
 
@@ -237,7 +263,7 @@ class CanvasRenderer {
         const pixelMinSpacing = 40;
         const rawDataSpacing = pixelMinSpacing / (baseScaleY * scaleY);
         const tickSpacing = this.niceNum_(rawDataSpacing);
-        for (let val = 0; val <= maxCycle; val += tickSpacing) {
+        for (let val = 0; val <= dataContext.getMaxY(); val += tickSpacing) {
             const y = val * baseScaleY * scaleY - offsetY;
             if (y < 0 || y > plotHeight) continue;
             canvasCtx.strokeStyle = '#444';
@@ -252,7 +278,7 @@ class CanvasRenderer {
         // X-axis ticks
         canvasCtx.textAlign = 'center';
         canvasCtx.textBaseline = 'top';
-        for (let i = 0; i < maxX; i++) {
+        for (let i = 0; i < dataContext.getMaxX(); i++) {
             const val = i;
             const x = this.MARGIN_LEFT_ + val * this.BASE_SCALE_X_ * scaleX + (this.BASE_SCALE_X_ * scaleX) / 2 - offsetX;
             canvasCtx.fillText(val.toString(), x, plotHeight + 3);
@@ -268,7 +294,7 @@ class CanvasRenderer {
 
         // 共通パラメータ
         const plotHeight = renderCtx.height - this.MARGIN_BOTTOM_;
-        const maxCycle = renderCtx.dataContext.maxCycle;
+        const maxCycle = renderCtx.dataContext.maxCycle_;
         const baseScaleY = plotHeight / (maxCycle + 1);
 
         // 可視セル数（カラム数・行数）
