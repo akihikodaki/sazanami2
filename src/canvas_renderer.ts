@@ -10,8 +10,17 @@ class RendererContext {
     height = 0;
     offsetX = 0;                       // horizontal scroll/offset
     offsetY = 0;                       // vertical scroll offset
-    scaleX = 1;                        // horizontal zoom scale
-    scaleY = 1;                        // vertical zoom scale
+
+    /**
+     * スケールは対数で保持し、実数値は getter で展開する。
+     * scale = exp(scaleLog)
+     */
+    scaleXLog = 0;                     // horizontal zoom scale (log)
+    scaleYLog = 0;                     // vertical zoom scale (log)
+
+    get scaleX() { return Math.exp(this.scaleXLog); }
+    get scaleY() { return Math.exp(this.scaleYLog); }
+
     numRows = 0;                       // number of rows in the data
 
     dataContext: {
@@ -34,8 +43,12 @@ class CanvasRenderer {
     MARGIN_BOTTOM_ = 20;
     BASE_SCALE_X_ = 20;
 
-    constructor() {
-    }
+    /**
+     * 1ステップあたりの対数ズーム量（従来の 1.1 倍/0.9 倍に相当）
+     */
+    ZOOM_STEP_LOG_ = Math.log(1.1);
+
+    constructor() {}
 
     initRendererContext(ctx: RendererContext, loader: Loader) {
         const columns: ParsedColumns = loader.columns;
@@ -53,37 +66,48 @@ class CanvasRenderer {
         // set data context and grid dimensions
         ctx.dataContext = { cycles, cus, wfs, states, maxCycle, maxWf, maxX };
 
-        ctx.scaleX = 1;
-        ctx.scaleY = 1;
+        // スケールは対数で 0 (= 1.0) に初期化
+        ctx.scaleXLog = 0;
+        ctx.scaleYLog = 0;
         ctx.offsetX = 0;
         ctx.offsetY = 0;
         ctx.numRows = loader.numRows;
     };
 
     // uniform zoom
-    // renderCtx を更新
+    // renderCtx を更新（対数スケールを加減算で更新）
     zoomUniform(renderCtx: RendererContext, mouseX: number, mouseY: number, zoomIn: boolean) {
         const prevX = renderCtx.scaleX;
         const prevY = renderCtx.scaleY;
-        const factor = zoomIn ? 1.1 : 0.9;
-        const newX = prevX * factor;
-        const newY = prevY * factor;
+        const step = this.ZOOM_STEP_LOG_;
+
+        // 対数空間での加減算によりズーム更新
+        if (zoomIn) {
+            renderCtx.scaleXLog += step;
+            renderCtx.scaleYLog += step;
+        } else {
+            renderCtx.scaleXLog -= step;
+            renderCtx.scaleYLog -= step;
+        }
+
+        const newX = renderCtx.scaleX;
+        const newY = renderCtx.scaleY;
         const relX = mouseX - this.MARGIN_LEFT_ + renderCtx.offsetX;
         const relY = mouseY + renderCtx.offsetY;
         renderCtx.offsetX = relX * (newX / prevX) - (mouseX - this.MARGIN_LEFT_);
         renderCtx.offsetY = relY * (newY / prevY) - mouseY;
-        renderCtx.scaleX = newX;
-        renderCtx.scaleY = newY;
     }
 
+    // horizontal-only zoom（対数スケール）
     zoomHorizontal(renderCtx: RendererContext, mouseX: number, mouseY: number, zoomIn: boolean) {
-        // horizontal-only zoom
         const prevX = renderCtx.scaleX;
-        const factor = zoomIn ? 1.1 : 0.9;
-        const newX = prevX * factor;
+        const step = this.ZOOM_STEP_LOG_;
+
+        renderCtx.scaleXLog += zoomIn ? step : -step;
+
+        const newX = renderCtx.scaleX;
         const relX = mouseX - this.MARGIN_LEFT_ + renderCtx.offsetX;
         renderCtx.offsetX = relX * (newX / prevX) - (mouseX - this.MARGIN_LEFT_);
-        renderCtx.scaleX = newX;
     }
 
     // Compute a "nice" number >= x
@@ -107,7 +131,9 @@ class CanvasRenderer {
     };
 
     draw(canvasCtx: CanvasRenderingContext2D, renderCtx: RendererContext) {
-        const { width, height, dataContext, offsetX, offsetY, scaleX, scaleY } = renderCtx;
+        const { width, height, dataContext, offsetX, offsetY } = renderCtx;
+        const scaleX = renderCtx.scaleX;
+        const scaleY = renderCtx.scaleY;
         if (!canvasCtx) return;
 
         // 背景クリア
