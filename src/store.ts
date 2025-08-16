@@ -1,5 +1,5 @@
 import {Loader} from "./loader";
-import CanvasRenderer from "./canvas_renderer";
+import {CanvasRenderer} from "./canvas_renderer";
 import { FileLineReader } from "./file_line_reader";
 
 enum ACTION {
