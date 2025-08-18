@@ -17,30 +17,34 @@ interface IntegerColumnBuffer {
 }
 
 class Loader {
-    private lineNum: number;
-    private numWarning: number;
+    private lineNum: number = 1;
+    private numWarning: number = 0;
 
-    private headers_: string[];
-    private headerIndex_: { [column: string]: number };
+    private headers_: string[] = [];
+    private headerIndex_: { [column: string]: number } = {};
 
     // データ保持: 常にIntegerColumnBuffer（最終列は別管理）
-    private columnsArr_: IntegerColumnBuffer[];
-    private lastColumnArr_: string[];
-    private types_: { [column: string]: ColumnType };
-    private statsArr_: ColumnStats[];
-    private stringDictArr_: { [value: string]: number }[];
-    private stringListArr_: string[][];
+    private columnsArr_: IntegerColumnBuffer[] = [];
+    private lastColumnArr_: string[] = [];
+    private types_: { [column: string]: ColumnType } = {};
+    private statsArr_: ColumnStats[] = [];
+    private stringDictArr_: { [value: string]: number }[] = [];
+    private stringListArr_: string[][] = [];
 
     // 型検出用
-    private rawBuffer_: { [column: string]: string[] };
-    private detection_: { [column: string]: ColumnType };
-    private detectionCount_: number;
-    private detectionDone_: boolean;
+    private rawBuffer_: { [column: string]: string[] } = {};
+    private detection_: { [column: string]: ColumnType } = {};
+    private detectionCount_: number = 0;
+    private detectionDone_: boolean = false;
     private static readonly TYPE_DETECT_COUNT = 100;
     private static readonly REPORT_INTERVAL = 1024 * 256;
     private static readonly INITIAL_CAPACITY = 1024;
 
     constructor() {
+        this.reset();
+    }
+
+    reset() {
         this.lineNum = 1;
         this.numWarning = 0;
         this.headers_ = [];
@@ -63,63 +67,54 @@ class Loader {
         progressCallback: (lineNum: number, line: string) => void,
         errorCallback: (error: any, lineNum: number) => void
     ) {
-        // 初期化
-        this.lineNum = 1;
-        this.headers_ = [];
-        this.headerIndex_ = {};
-        this.columnsArr_ = [];
-        this.lastColumnArr_ = [];
-        this.types_ = {};
-        this.statsArr_ = [];
-        this.stringDictArr_ = [];
-        this.stringListArr_ = [];
-        this.rawBuffer_ = {};
-        this.detection_ = {};
-        this.detectionCount_ = 0;
-        this.detectionDone_ = false;
-
+        this.reset();
         reader.load(
-            (line: string) => {
+            (line: string) => { // onLineRead
                 this.parseLine_(line, errorCallback);
                 if (this.lineNum % Loader.REPORT_INTERVAL === 0) {
                     progressCallback(this.lineNum, line);
                 }
                 this.lineNum++;
             },
-            () => {
+            () => { // onFinish
                 if (!this.detectionDone_) {
                     this.finalizeTypes_();
                 }
                 finishCallback();
             },
-            (error: any) => {
+            (error: any) => {   // onError
                 errorCallback(error, this.lineNum);
             }
         );
+    }
+
+    // ヘッダー行設定
+    private parseHeader_(line: string): void {
+        let values = line.split("\t");
+        this.headers_ = values;
+
+        // 全てIntegerColumnBufferで初期化
+        this.columnsArr_ = values.map((_, i) => ({ buffer: new Int32Array(Loader.INITIAL_CAPACITY), length: 0 }));
+        this.lastColumnArr_ = [];
+        this.statsArr_ = values.map(() => ({ min: Infinity, max: -Infinity }));
+        this.stringDictArr_ = values.map(() => ({}));
+        this.stringListArr_ = values.map(() => []);
+        values.forEach((header, i) => {
+            this.headerIndex_[header] = i;
+            this.types_[header] = 'string';
+            this.rawBuffer_[header] = [];
+            this.detection_[header] = 'integer';
+        });
     }
 
     private parseLine_(
         line: string,
         errorCallback: (error: any, lineNum: number) => void
     ): void {
-        let values = line.split("\t");
         if (this.lineNum === 1) {
-            // ヘッダー行設定
-            this.headers_ = values;
-            const lastIdx = values.length - 1;
-            // 全てIntegerColumnBufferで初期化
-            this.columnsArr_ = values.map((_, i) => ({ buffer: new Int32Array(Loader.INITIAL_CAPACITY), length: 0 }));
-            this.lastColumnArr_ = [];
-            this.statsArr_ = values.map(() => ({ min: Infinity, max: -Infinity }));
-            this.stringDictArr_ = values.map(() => ({}));
-            this.stringListArr_ = values.map(() => []);
-            values.forEach((header, i) => {
-                this.headerIndex_[header] = i;
-                this.types_[header] = 'string';
-                this.rawBuffer_[header] = [];
-                this.detection_[header] = 'integer';
-            });
+            this.parseHeader_(line);
         } else {
+            let values = line.split("\t");
             if (values.length > this.headers_.length) {
                 this.numWarning++;
                 if (this.numWarning <= 10) {
