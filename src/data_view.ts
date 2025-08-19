@@ -1,4 +1,4 @@
-import { Loader, ParsedColumns } from "./loader";
+import { Loader, ParsedColumns, ColumnBuffer } from "./loader";
 
 interface DataViewIF {
     getX(i: number): number;
@@ -11,10 +11,10 @@ interface DataViewIF {
 }
 
 class OpenCL_DataView implements DataViewIF {
-    cycles_ = new Int32Array();
-    cus_ = new Int32Array();
-    wfs_ = new Int32Array();
-    states_ = new Int32Array();
+    cycles_ = new ColumnBuffer();
+    cus_ = new ColumnBuffer();
+    wfs_ = new ColumnBuffer();
+    states_ = new ColumnBuffer();
     maxCycle_ = 0;
     maxWf_ = 0;
     maxCu_ = 0;
@@ -22,13 +22,13 @@ class OpenCL_DataView implements DataViewIF {
     numRows_ = 0; // 行数
 
     init(loader: Loader) {
-        const columns: ParsedColumns = loader.columns;
+        const columns = loader.columns;
         const stats = loader.stats;
 
-        this.cycles_ = columns["cycle"] as Int32Array;
-        this.cus_ = columns["cu"] as Int32Array;
-        this.wfs_ = columns["wf"] as Int32Array;
-        this.states_ = columns["state"] as Int32Array;
+        this.cycles_ = columns["cycle"];
+        this.cus_ = columns["cu"];
+        this.wfs_ = columns["wf"];
+        this.states_ = columns["state"];
 
         this.maxCu_ = stats["cu"].max;
         this.maxWf_ = stats["wf"].max;
@@ -40,13 +40,13 @@ class OpenCL_DataView implements DataViewIF {
     }
 
     getX(i: number): number {
-        return this.cus_[i] * (this.maxWf_ + 1) + this.wfs_[i];
+        return this.cus_.buffer[i] * (this.maxWf_ + 1) + this.wfs_.buffer[i];
     };
     getY(i: number): number { 
-        return  this.cycles_[i]; 
+        return  this.cycles_.buffer[i]; 
     }
     getState(i: number): number {
-        return this.states_[i];  
+        return this.states_.buffer[i];  
     }
 
     lowerBound_(arr: Int32Array, length: number, target: number): number {
@@ -59,10 +59,10 @@ class OpenCL_DataView implements DataViewIF {
         return lo;
     };
     getStartIdx(yStart: number): number {
-        return this.lowerBound_(this.cycles_, this.numRows_, yStart);
+        return this.lowerBound_(this.cycles_.buffer, this.numRows_, yStart);
     }
     getEndIdx(yEnd: number): number {
-        return Math.min(this.lowerBound_(this.cycles_, this.numRows_, yEnd), this.numRows_);
+        return Math.min(this.lowerBound_(this.cycles_.buffer, this.numRows_, yEnd), this.numRows_);
     }
 
     getMaxX(): number {
@@ -71,8 +71,8 @@ class OpenCL_DataView implements DataViewIF {
     getMaxY(): number {
         return this.maxCycle_;
     }
-
 };
+
 
 const GetDataView = (loader: Loader): DataViewIF => {
     const dataView = new OpenCL_DataView();

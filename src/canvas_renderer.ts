@@ -261,16 +261,8 @@ class CanvasRenderer {
             const cols = loader.columns;    // ParsedColumns 型
             const types = loader.types;     // 各列の型情報
             payload = Object.keys(cols).map((colName) => {
-                const arr = cols[colName] as Int32Array;
-                let value: string | number;
-                if (types[colName] === ColumnType.STRING_CODE) {
-                    // string 型列は、配列に格納されている整数値を渡す
-                    const codeValue = arr[recordIndex];
-                    value = loader.getOriginalString(colName, codeValue);
-                } else {
-                    // 数値列は配列から直接
-                    value = arr[recordIndex];
-                }
+                const arr = cols[colName];
+                let value = arr.getString(recordIndex);
                 return `${colName}: ${value}`;
             }).join(", ") + ", ";
         }

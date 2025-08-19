@@ -2,7 +2,7 @@ import { FileLineReader } from "./file_line_reader";
 import { GetDataView, DataViewIF } from "./data_view";
 
 // カラムデータは整数列ならInt32Array、文字列列なら文字列配列
-type ParsedColumns = { [column: string]: Int32Array | string[] };
+type ParsedColumns = { [column: string]: ColumnBuffer };
 enum ColumnType { INTEGER, STRING_CODE, RAW_STRING};
 
 class ColumnStats {
@@ -37,7 +37,34 @@ class ColumnBuffer {
         this.stat = new ColumnStats();
     }
 
+    get(index: number): number|string {
+        if (this.type == ColumnType.RAW_STRING) {
+            return this.rawStringList[index];
+        }
+        else {
+            return this.buffer[index];
+        }
+    }
+
+    getString(index: number): string {
+        if (this.type === ColumnType.RAW_STRING) {
+            return this.rawStringList[index];
+        } else if (this.type === ColumnType.STRING_CODE) {
+            const code = this.buffer[index];
+            return this.codeToStringList[code];
+        } else {
+            return this.buffer[index].toString();
+        }
+    }
+
+    getNumber(index: number): number {
+        if (this.type === ColumnType.RAW_STRING || this.type === ColumnType.STRING_CODE) {
+            throw new Error("Cannot get number from string column");
+        }
+        return this.buffer[index];
+    }
 }
+
 
 class Loader {
     private lineNum: number = 1;
@@ -238,13 +265,7 @@ class Loader {
     public get columns(): ParsedColumns {
         const result: ParsedColumns = {};
         this.headers_.forEach((header, i) => {
-            let col = this.columnsArr_[i];
-            if (col.type === ColumnType.RAW_STRING) {
-                result[header] = this.columnsArr_[i].rawStringList;
-            }
-            else {
-                result[header] = this.columnsArr_[i].buffer;
-            }
+            result[header] = this.columnsArr_[i];
         });
         return result;
     }
@@ -298,4 +319,4 @@ class Loader {
     }
 }
 
-export { Loader, ParsedColumns, ColumnType, DataViewIF };
+export { Loader, ParsedColumns, ColumnType, ColumnBuffer, DataViewIF };
