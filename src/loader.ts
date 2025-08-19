@@ -3,7 +3,7 @@ import { GetDataView, DataViewIF } from "./data_view";
 
 // カラムデータは整数列ならInt32Array、文字列列なら文字列配列
 type ParsedColumns = { [column: string]: Int32Array | string[] };
-type ColumnType = 'integer' | 'string' | 'raw_string';
+enum ColumnType { INTEGER, STRING_CODE, RAW_STRING};
 
 class ColumnStats {
     min: number = Infinity;
@@ -30,7 +30,7 @@ class ColumnBuffer {
     constructor() {
         this.buffer = new Int32Array(ColumnBuffer.INITIAL_CAPACITY);
         this.length = 0;
-        this.type = 'string';
+        this.type = ColumnType.INTEGER; // 初期は整数列
         this.stringToCodeDict = {};
         this.codeToStringList = [];
         this.rawStringList = [];
@@ -110,7 +110,7 @@ class Loader {
         values.forEach((header, i) => {
             this.headerIndex_[header] = i;
             this.rawBuffer_[header] = [];
-            this.detection_[header] = 'integer';
+            this.detection_[header] = ColumnType.INTEGER; // 初期は整数列
         });
     }
 
@@ -156,12 +156,12 @@ class Loader {
         const isHex = /^0[xX][0-9A-Fa-f]+$/.test(value);
         const isInt = /^-?\d+$/.test(value);
         // 数値じゃ無いものが1度でも現れたら code に変更
-        if (this.detection_[header] === 'integer' && !isHex && !isInt) {
-            this.detection_[header] = 'string';
+        if (this.detection_[header] == ColumnType.INTEGER && !isHex && !isInt) {
+            this.detection_[header] = ColumnType.STRING_CODE;
         }
         // 文字列が中に空白を含んでいるか，12文字より長い場合は文字列型に変更
-        if (this.detection_[header] === 'string' && (value.length > 12 || value.includes(" "))) {
-            this.detection_[header] = 'raw_string';
+        if (this.detection_[header] === ColumnType.STRING_CODE && (value.length > 12 || value.includes(" "))) {
+            this.detection_[header] = ColumnType.RAW_STRING;
         }
     }
 
@@ -179,9 +179,9 @@ class Loader {
 
     private pushValue(index: number, raw: string): void {
         const col = this.columnsArr_[index];
-        if (col.type === 'integer') {
+        if (col.type === ColumnType.INTEGER) {
             this.pushBufferValue_(index, raw);
-        } else if (col.type === 'string') {
+        } else if (col.type === ColumnType.STRING_CODE) {
             this.pushStringCode_(index, raw);
         } else {
             this.pushRawString_(index, raw);
@@ -239,7 +239,7 @@ class Loader {
         const result: ParsedColumns = {};
         this.headers_.forEach((header, i) => {
             let col = this.columnsArr_[i];
-            if (col.type === 'raw_string') {
+            if (col.type === ColumnType.RAW_STRING) {
                 result[header] = this.columnsArr_[i].rawStringList;
             }
             else {

@@ -1,4 +1,4 @@
-import { Loader, DataViewIF } from "./loader";
+import { Loader, DataViewIF, ColumnType } from "./loader";
 
 /**
  * Context holding canvas rendering state and loaded data
@@ -263,7 +263,7 @@ class CanvasRenderer {
             payload = Object.keys(cols).map((colName) => {
                 const arr = cols[colName] as Int32Array;
                 let value: string | number;
-                if (types[colName] === "string") {
+                if (types[colName] === ColumnType.STRING_CODE) {
                     // string 型列は、配列に格納されている整数値を渡す
                     const codeValue = arr[recordIndex];
                     value = loader.getOriginalString(colName, codeValue);
