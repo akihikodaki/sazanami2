@@ -5,9 +5,9 @@ import { GetDataView, DataViewIF } from "./data_view";
 type ParsedColumns = { [column: string]: Int32Array | string[] };
 type ColumnType = 'integer' | 'string' | 'raw_string';
 
-interface ColumnStats {
-    min: number;
-    max: number;
+class ColumnStats {
+    min: number = Infinity;
+    max: number = -Infinity;
 }
 
 // 動的に拡張可能な整数バッファ
@@ -25,6 +25,8 @@ class ColumnBuffer {
     raw_string: string[];                   // 文字列列用の文字列リスト
     length: number;
 
+    stat: ColumnStats;
+
     constructor() {
         this.buffer = new Int32Array(ColumnBuffer.INITIAL_CAPACITY);
         this.length = 0;
@@ -32,6 +34,7 @@ class ColumnBuffer {
         this.codeDict = {};
         this.stringList = [];
         this.raw_string = [];
+        this.stat = new ColumnStats();
     }
 
 }
@@ -43,10 +46,9 @@ class Loader {
     private headers_: string[] = [];
     private headerIndex_: { [column: string]: number } = {};
 
-    // データ保持: 常にIntegerColumnBuffer（最終列は別管理）
+    // データ保持
     private columnsArr_: ColumnBuffer[] = [];
     private lastColumnArr_: string[] = [];
-    private statsArr_: ColumnStats[] = [];
 
     // 型検出用
     private rawBuffer_: { [column: string]: string[] } = {};
@@ -67,7 +69,6 @@ class Loader {
         this.headerIndex_ = {};
         this.columnsArr_ = [];
         this.lastColumnArr_ = [];
-        this.statsArr_ = [];
         this.rawBuffer_ = {};
         this.detection_ = {};
         this.detectionCount_ = 0;
@@ -109,7 +110,6 @@ class Loader {
         // 全てIntegerColumnBufferで初期化
         this.columnsArr_ = values.map((_, i) => (new ColumnBuffer()));
         this.lastColumnArr_ = [];
-        this.statsArr_ = values.map(() => ({ min: Infinity, max: -Infinity }));
         values.forEach((header, i) => {
             this.headerIndex_[header] = i;
             this.rawBuffer_[header] = [];
@@ -203,7 +203,7 @@ class Loader {
         col.buffer[col.length] = num;
         col.length++;
         // stats更新
-        const stat = this.statsArr_[index];
+        const stat = col.stat;
         if (num < stat.min) stat.min = num;
         if (num > stat.max) stat.max = num;
     }
@@ -257,7 +257,7 @@ class Loader {
     public get stats(): { [column: string]: ColumnStats } {
         const result: { [column: string]: ColumnStats } = {};
         this.headers_.forEach((header, i) => {
-            result[header] = this.statsArr_[i];
+            result[header] = this.columnsArr_[i].stat;
         });
         return result;
     }
