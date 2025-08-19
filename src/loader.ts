@@ -188,8 +188,8 @@ class Loader {
         if (this.detection_[header] == ColumnType.INTEGER && !isHex && !isInt) {
             this.detection_[header] = ColumnType.STRING_CODE;
         }
-        // 文字列が中に空白を含んでいるか，12文字より長い場合は文字列型に変更
-        if (this.detection_[header] === ColumnType.STRING_CODE && (value.length > 12 || value.includes(" "))) {
+        // 文字列が中に空白を含んでいるか，32文字より長い場合は文字列型に変更
+        if (this.detection_[header] === ColumnType.STRING_CODE && (value.length > 32 || value.includes(" "))) {
             this.detection_[header] = ColumnType.RAW_STRING;
         }
     }
