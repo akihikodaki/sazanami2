@@ -19,10 +19,10 @@ class ColumnBuffer {
 
     // 文字列の種類が少ない場合，code で保持し，圧縮して持つ
     // code は 0 から始まる連続値
-    codeDict: { [value: string]: number };  // 文字列に対応する code を格納
-    stringList: string[];                   // code に対応する文字列のリスト
+    stringToCodeDict: { [value: string]: number };  // 文字列に対応する code を格納
+    codeToStringList: string[];                     // code に対応する文字列のリスト
 
-    raw_string: string[];                   // 文字列列用の文字列リスト
+    rawStringList: string[];                   // 文字列列用の文字列リスト
     length: number;
 
     stat: ColumnStats;
@@ -31,9 +31,9 @@ class ColumnBuffer {
         this.buffer = new Int32Array(ColumnBuffer.INITIAL_CAPACITY);
         this.length = 0;
         this.type = 'string';
-        this.codeDict = {};
-        this.stringList = [];
-        this.raw_string = [];
+        this.stringToCodeDict = {};
+        this.codeToStringList = [];
+        this.rawStringList = [];
         this.stat = new ColumnStats();
     }
 
@@ -48,7 +48,6 @@ class Loader {
 
     // データ保持
     private columnsArr_: ColumnBuffer[] = [];
-    private lastColumnArr_: string[] = [];
 
     // 型検出用
     private rawBuffer_: { [column: string]: string[] } = {};
@@ -68,7 +67,6 @@ class Loader {
         this.headers_ = [];
         this.headerIndex_ = {};
         this.columnsArr_ = [];
-        this.lastColumnArr_ = [];
         this.rawBuffer_ = {};
         this.detection_ = {};
         this.detectionCount_ = 0;
@@ -109,7 +107,6 @@ class Loader {
 
         // 全てIntegerColumnBufferで初期化
         this.columnsArr_ = values.map((_, i) => (new ColumnBuffer()));
-        this.lastColumnArr_ = [];
         values.forEach((header, i) => {
             this.headerIndex_[header] = i;
             this.rawBuffer_[header] = [];
@@ -147,20 +144,13 @@ class Loader {
                 }
             } else {
                 values.forEach((raw, index) => {
-                    const header = this.headers_[index];
                     const val = raw ?? "";
-                    if (index === lastIdx) {
-                        this.lastColumnArr_.push(val);
-                    } else if (this.columnsArr_[index].type === 'integer') {
-                        this.pushBufferValue_(index, val);
-                    } else {
-                        // 文字列列も数値コードで格納
-                        this.pushStringCode_(index, val);
-                    }
+                    this.pushValue(index, val);
                 });
             }
         }
     }
+
 
     private detectTypePhase_(header: string, value: string, last: boolean): void {
         this.rawBuffer_[header].push(value);
@@ -179,16 +169,21 @@ class Loader {
             // last column handled separately
             // rawBufferからデータをバッファへ反映
             this.rawBuffer_[header].forEach(val => {
-                if (index === lastIdx) {
-                    this.lastColumnArr_.push(val);
-                } else if (type === 'integer') {
-                    this.pushBufferValue_(index, val);
-                } else {
-                    this.pushStringCode_(index, val);
-                }
+                this.pushValue(index, val);
             });
             delete this.rawBuffer_[header];
         });
+    }
+
+    private pushValue(index: number, raw: string): void {
+        const col = this.columnsArr_[index];
+        if (col.type === 'integer') {
+            this.pushBufferValue_(index, raw);
+        } else if (col.type === 'string') {
+            this.pushStringCode_(index, raw);
+        } else {
+            this.pushRawString_(index, raw);
+        }
     }
 
     /** Int32Array bufferに数値を追加 (整数・16進 or 10進) */
@@ -210,8 +205,8 @@ class Loader {
 
     /** 文字列をコード化してbufferに追加 */
     private pushStringCode_(index: number, raw: string): void {
-        const codeDict = this.columnsArr_[index].codeDict;
-        const strList = this.columnsArr_[index].stringList;
+        const codeDict = this.columnsArr_[index].stringToCodeDict;
+        const strList = this.columnsArr_[index].codeToStringList;
         let code: number;
         if (codeDict.hasOwnProperty(raw)) {
             code = codeDict[raw];
@@ -231,12 +226,19 @@ class Loader {
         col.length++;
     }
 
+    // 文字列列の生データを追加
+    private pushRawString_(index: number, raw: string): void {
+        const col = this.columnsArr_[index];
+        col.rawStringList.push(raw);
+        col.length++;
+    }
+
     public get columns(): ParsedColumns {
         const result: ParsedColumns = {};
         const lastIdx = this.headers_.length - 1;
         this.headers_.forEach((header, i) => {
             if (i === lastIdx) {
-                result[header] = this.lastColumnArr_;
+                result[header] = this.columnsArr_[i].rawStringList;
             }
             else {
                 result[header] = this.columnsArr_[i].buffer;
@@ -273,7 +275,7 @@ class Loader {
         if (idx == null || idx === this.headers_.length - 1) {
             throw new Error("Original string lookup is only valid for non-last string columns.");
         }
-        const list = this.columnsArr_[idx].stringList;
+        const list = this.columnsArr_[idx].codeToStringList;
         if (code < 0 || code >= list.length) {
             throw new Error(`Invalid code ${code} for column ${column}`);
         }
@@ -286,7 +288,7 @@ class Loader {
             throw new Error("Dictionary is only valid for non-last string columns.");
         }
         // stringList のシャローコピーを返す
-        return [...this.columnsArr_[idx].stringList];
+        return [...this.columnsArr_[idx].codeToStringList];
     }
 
     public GetDataView(): DataViewIF {
