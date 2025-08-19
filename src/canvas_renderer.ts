@@ -82,12 +82,13 @@ class CanvasRenderer {
         renderCtx.offsetX = relX * (newX / prevX) - (mouseX - this.MARGIN_LEFT_);
     }
 
-    // Compute a "nice" number >= x
+    // 10進で上位2桁を 1, 2, 5, 10 のいずれかに丸めて「見やすい数値」を返す
     niceNum_(x: number): number {
-        const exponent = Math.floor(Math.log10(x));
-        const base = Math.pow(10, exponent);
-        const fraction = x / base;
+        const exponent = Math.floor(Math.log10(x)); // 10 で対数を取って切り捨て
+        const base = Math.pow(10, exponent);    // 10 のべき乗
+        const fraction = x / base;  // 基数で割って10進数で上位二桁を取り出す
         let niceFraction: number;
+        // 1, 2, 5 のいずれかに丸める
         if (fraction <= 1) niceFraction = 1;
         else if (fraction <= 2) niceFraction = 2;
         else if (fraction <= 5) niceFraction = 5;
@@ -114,6 +115,7 @@ class CanvasRenderer {
 
         if (!dataView) return;
         const plotHeight = height - this.MARGIN_BOTTOM_;
+        const plotWidth = width - this.MARGIN_LEFT_;
         const baseScaleY = plotHeight / (dataView.getMaxY() + 1);
 
         // 表示セル数
@@ -193,12 +195,14 @@ class CanvasRenderer {
         canvasCtx.fillStyle = '#eee';
         canvasCtx.textAlign = 'right';
         canvasCtx.textBaseline = 'middle';
-        const pixelMinSpacing = 40;
-        const rawDataSpacing = pixelMinSpacing / (baseScaleY * scaleY);
-        const tickSpacing = this.niceNum_(rawDataSpacing);
-        for (let val = 0; val <= dataView.getMaxY(); val += tickSpacing) {
+        const pixelMinSpacingY = 40;
+        const rawDataSpacingY = pixelMinSpacingY / (baseScaleY * scaleY);
+        let tickSpacingY = this.niceNum_(rawDataSpacingY);
+        tickSpacingY = tickSpacingY < 1 ? 1 : tickSpacingY; // 最小値を 1 に設定
+        for (let val = 0; val <= dataView.getMaxY(); val += tickSpacingY) {
             const y = val * baseScaleY * scaleY - offsetY;
-            if (y < 0 || y > plotHeight) continue;
+            if (y < 0) continue;
+            if (y > plotHeight) break;
             canvasCtx.strokeStyle = '#444';
             canvasCtx.lineWidth = 1;
             canvasCtx.beginPath();
@@ -211,9 +215,15 @@ class CanvasRenderer {
         // X-axis ticks
         canvasCtx.textAlign = 'center';
         canvasCtx.textBaseline = 'top';
-        for (let i = 0; i < dataView.getMaxX(); i++) {
+        const pixelMinSpacingX = dataView.getMaxX() < 16 ? 10 : 40; // 数字が小さい場合は最小間隔を 10 に設定
+        const rawDataSpacingX = pixelMinSpacingX / (this.BASE_SCALE_X_ * scaleX);
+        let tickSpacingX = this.niceNum_(rawDataSpacingX);
+        tickSpacingX = tickSpacingX < 1 ? 1 : tickSpacingX; // 最小値を 1 に設定
+        for (let i = 0; i < dataView.getMaxX(); i += tickSpacingX) {
             const val = i;
             const x = this.MARGIN_LEFT_ + val * this.BASE_SCALE_X_ * scaleX + (this.BASE_SCALE_X_ * scaleX) / 2 - offsetX;
+            if (x < 0) continue;
+            if (x > plotWidth) break;
             canvasCtx.fillText(val.toString(), x, plotHeight + 3);
         }
     };
