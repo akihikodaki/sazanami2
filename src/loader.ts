@@ -132,11 +132,10 @@ class Loader {
                 }
                 values = values.slice(0, this.headers_.length);
             }
-            const lastIdx = this.headers_.length - 1;
-            if (!this.detectionDone_) {
+            if (!this.detectionDone_) { // 一定の行数までは型検出を行う
                 this.detectionCount_++;
                 values.forEach((raw, index) => {
-                    this.detectTypePhase_(this.headers_[index], raw ?? "", index == lastIdx);
+                    this.detectTypePhase_(this.headers_[index], raw ?? ""); // null or undefined to empty string
                 });
                 if (this.detectionCount_ === Loader.TYPE_DETECT_COUNT) {
                     this.finalizeTypes_();
@@ -152,21 +151,24 @@ class Loader {
     }
 
 
-    private detectTypePhase_(header: string, value: string, last: boolean): void {
+    private detectTypePhase_(header: string, value: string): void {
         this.rawBuffer_[header].push(value);
         const isHex = /^0[xX][0-9A-Fa-f]+$/.test(value);
         const isInt = /^-?\d+$/.test(value);
+        // 数値じゃ無いものが1度でも現れたら code に変更
         if (this.detection_[header] === 'integer' && !isHex && !isInt) {
-            this.detection_[header] = last ? 'raw_string' : 'string';
+            this.detection_[header] = 'string';
+        }
+        // 文字列が中に空白を含んでいるか，12文字より長い場合は文字列型に変更
+        if (this.detection_[header] === 'string' && (value.length > 12 || value.includes(" "))) {
+            this.detection_[header] = 'raw_string';
         }
     }
 
     private finalizeTypes_(): void {
-        const lastIdx = this.headers_.length - 1;
         this.headers_.forEach((header, index) => {
             const type = this.detection_[header];
             this.columnsArr_[index].type = type;
-            // last column handled separately
             // rawBufferからデータをバッファへ反映
             this.rawBuffer_[header].forEach(val => {
                 this.pushValue(index, val);
@@ -235,9 +237,9 @@ class Loader {
 
     public get columns(): ParsedColumns {
         const result: ParsedColumns = {};
-        const lastIdx = this.headers_.length - 1;
         this.headers_.forEach((header, i) => {
-            if (i === lastIdx) {
+            let col = this.columnsArr_[i];
+            if (col.type === 'raw_string') {
                 result[header] = this.columnsArr_[i].rawStringList;
             }
             else {
@@ -272,8 +274,8 @@ class Loader {
 
     public getOriginalString(column: string, code: number): string {
         const idx = this.headerIndex_[column];
-        if (idx == null || idx === this.headers_.length - 1) {
-            throw new Error("Original string lookup is only valid for non-last string columns.");
+        if (idx == null) {
+            throw new Error("Invalid column name: " + column);
         }
         const list = this.columnsArr_[idx].codeToStringList;
         if (code < 0 || code >= list.length) {
@@ -284,8 +286,8 @@ class Loader {
 
     public getDictionary(column: string): string[] {
         const idx = this.headerIndex_[column];
-        if (idx == null || idx === this.headers_.length - 1) {
-            throw new Error("Dictionary is only valid for non-last string columns.");
+        if (idx == null) {
+            throw new Error("Invalid column name: " + column);
         }
         // stringList のシャローコピーを返す
         return [...this.columnsArr_[idx].codeToStringList];
