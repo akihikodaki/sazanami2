@@ -3,7 +3,7 @@ import { GetDataView, DataViewIF } from "./data_view";
 
 // カラムデータは整数列ならInt32Array、文字列列なら文字列配列
 type ParsedColumns = { [column: string]: ColumnBuffer };
-enum ColumnType { INTEGER, STRING_CODE, RAW_STRING};
+enum ColumnType { INTEGER, HEX, STRING_CODE, RAW_STRING};
 
 class ColumnStats {
     min: number = Infinity;
@@ -81,7 +81,7 @@ class Loader {
     private detection_: { [column: string]: ColumnType } = {};
     private detectionCount_: number = 0;
     private detectionDone_: boolean = false;
-    private static readonly TYPE_DETECT_COUNT = 100;
+    private static readonly TYPE_DETECT_COUNT = 2048;
     private static readonly REPORT_INTERVAL = 1024 * 256;
 
     constructor() {
@@ -161,6 +161,9 @@ class Loader {
                 }
                 values = values.slice(0, this.headers_.length);
             }
+            while (values.length < this.headers_.length) {
+                values.push("");    // 不足分は空文字で埋める
+            }
             if (!this.detectionDone_) { // 一定の行数までは型検出を行う
                 this.detectionCount_++;
                 values.forEach((raw, index) => {
@@ -182,10 +185,13 @@ class Loader {
 
     private detectTypePhase_(header: string, value: string): void {
         this.rawBuffer_[header].push(value);
-        const isHex = /^0[xX][0-9A-Fa-f]+$/.test(value);
+        const isHex = /^(?:0[xX])?[0-9A-Fa-f]+$/.test(value);
         const isInt = /^-?\d+$/.test(value);
+        if (this.detection_[header] < ColumnType.HEX && isHex && !isInt) {
+            this.detection_[header] = ColumnType.HEX;
+        }
         // 数値じゃ無いものが1度でも現れたら code に変更
-        if (this.detection_[header] == ColumnType.INTEGER && !isHex && !isInt) {
+        if (this.detection_[header] < ColumnType.STRING_CODE && !isHex && !isInt) {
             this.detection_[header] = ColumnType.STRING_CODE;
         }
         // 文字列が中に空白を含んでいるか，32文字より長い場合は文字列型に変更
@@ -208,7 +214,7 @@ class Loader {
 
     private pushValue(index: number, raw: string): void {
         const col = this.columnsArr_[index];
-        if (col.type === ColumnType.INTEGER) {
+        if (col.type === ColumnType.INTEGER || col.type === ColumnType.HEX) {
             this.pushBufferValue_(index, raw);
         } else if (col.type === ColumnType.STRING_CODE) {
             this.pushStringCode_(index, raw);
@@ -219,8 +225,8 @@ class Loader {
 
     /** Int32Array bufferに数値を追加 (整数・16進 or 10進) */
     private pushBufferValue_(index: number, raw: string): void {
-        const num = /^0[xX]/.test(raw) ? parseInt(raw, 16) : parseInt(raw, 10);
         const col = this.columnsArr_[index];
+        const num = col.type === ColumnType.HEX ? parseInt(raw, 16) : parseInt(raw, 10);
         if (col.length >= col.buffer.length) {
             const newBuf = new Int32Array(col.buffer.length * 2);
             newBuf.set(col.buffer);
