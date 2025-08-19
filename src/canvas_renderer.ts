@@ -258,10 +258,10 @@ class CanvasRenderer {
         // 全 columns を走査して "列名: 値, " の文字列を組み立て
         let payload = "";
         if (recordIndex >= 0) {
-            const cols = loader.columns;    // ParsedColumns 型
+            const cols = loader.headers;    // ParsedColumns 型
             const types = loader.types;     // 各列の型情報
-            payload = Object.keys(cols).map((colName) => {
-                const arr = cols[colName];
+            payload = cols.map((colName) => {
+                const arr = loader.columnFromName(colName);
                 let value = arr.getString(recordIndex);
                 return `${colName}: ${value}`;
             }).join(", ") + ", ";

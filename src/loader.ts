@@ -145,6 +145,8 @@ class Loader {
         line: string,
         errorCallback: (error: any, lineNum: number) => void
     ): void {
+        line = line.trim();
+
         if (this.lineNum === 1) {
             this.parseHeader_(line);
         } else {
@@ -262,14 +264,6 @@ class Loader {
         col.length++;
     }
 
-    public get columns(): ParsedColumns {
-        const result: ParsedColumns = {};
-        this.headers_.forEach((header, i) => {
-            result[header] = this.columnsArr_[i];
-        });
-        return result;
-    }
-
     // タイプの辞書を作って返す
     public get types(): { [column: string]: ColumnType } {
         const result: { [column: string]: ColumnType } = {};
@@ -285,6 +279,22 @@ class Loader {
             result[header] = this.columnsArr_[i].stat;
         });
         return result;
+    }
+
+    public get headers(): string[] {
+        return this.headers_;
+    }
+
+    public get columns(): ColumnBuffer[] {
+        return this.columnsArr_;
+    }
+
+    public columnFromName(name: string): ColumnBuffer {
+        return this.columnsArr_[this.headerIndex_[name]];
+    }
+
+    public get headerIndexDict(): { [column: string]: number } {
+        return this.headerIndex_;
     }
 
     public get numRows(): number {

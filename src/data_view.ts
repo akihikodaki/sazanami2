@@ -8,6 +8,7 @@ interface DataViewIF {
     getEndIdx(yEnd: number): number;
     getMaxX(): number;
     getMaxY(): number;
+    test(headers: string[]): boolean;
 }
 
 class OpenCL_DataView implements DataViewIF {
@@ -22,13 +23,12 @@ class OpenCL_DataView implements DataViewIF {
     numRows_ = 0; // 行数
 
     init(loader: Loader) {
-        const columns = loader.columns;
         const stats = loader.stats;
 
-        this.cycles_ = columns["cycle"];
-        this.cus_ = columns["cu"];
-        this.wfs_ = columns["wf"];
-        this.states_ = columns["state"];
+        this.cycles_ = loader.columnFromName("cycle");
+        this.cus_ = loader.columnFromName("cu");
+        this.wfs_ = loader.columnFromName("wf");
+        this.states_ = loader.columnFromName("state");
 
         this.maxCu_ = stats["cu"].max;
         this.maxWf_ = stats["wf"].max;
@@ -37,6 +37,17 @@ class OpenCL_DataView implements DataViewIF {
         this.maxCycle_ = stats["cycle"].max;
 
         this.numRows_ = loader.numRows;
+    }
+
+    test(headers: string[]): boolean {
+        // headers に expectedHeaders が含まれているかチェック
+        const expectedHeaders = ["cycle", "cu", "wf", "state"];
+        for (const h of expectedHeaders) {
+            if (!headers.includes(h)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     getX(i: number): number {
@@ -74,10 +85,73 @@ class OpenCL_DataView implements DataViewIF {
 };
 
 
+class GenericDataView implements DataViewIF {
+    y_ = new ColumnBuffer();
+    x_ = new ColumnBuffer();
+    states_: null | ColumnBuffer = new ColumnBuffer();
+    numRows_ = 0; // 行数
+
+    test(headers: string[]): boolean {
+        // 2個以上あれば OK
+        return headers.length >= 2;
+    }
+
+    init(loader: Loader) {
+        const columns = loader.columns;
+        const headers = loader.headers;
+        this.y_ = columns[0];
+        this.x_ = columns[1];
+        this.states_ = headers.length > 2 ? columns[2] : null;
+        this.numRows_ = loader.numRows;
+    }
+
+    getX(i: number): number {
+        return this.x_.getNumber(i);
+    };
+    getY(i: number): number { 
+        return  this.y_.getNumber(i); 
+    }
+    getState(i: number): number {
+        return this.states_ ? this.states_.getNumber(i) : 0;
+    }
+
+    lowerBound_(arr: Int32Array, length: number, target: number): number {
+        let lo = 0, hi = length;
+        while (lo < hi) {
+            const mid = (lo + hi) >>> 1;
+            if (arr[mid] < target) lo = mid + 1;
+            else hi = mid;
+        }
+        return lo;
+    };
+    getStartIdx(yStart: number): number {
+        return this.lowerBound_(this.y_.buffer, this.numRows_, yStart);
+    }
+    getEndIdx(yEnd: number): number {
+        return Math.min(this.lowerBound_(this.y_.buffer, this.numRows_, yEnd), this.numRows_);
+    }
+
+    getMaxX(): number {
+        return this.x_.stat.max;
+    }
+    getMaxY(): number {
+        return this.y_.stat.max;
+    }
+};
+
+
 const GetDataView = (loader: Loader): DataViewIF => {
-    const dataView = new OpenCL_DataView();
-    dataView.init(loader);
-    return dataView;
+    const candidates = [OpenCL_DataView, GenericDataView];
+
+    for (const ViewClass of candidates) {
+        const view = new ViewClass();
+        if (view.test(loader.headers)) {
+            view.init(loader);
+            return view;
+        }
+    }
+
+    throw new Error("No suitable DataView found");
 }
 
 export { DataViewIF, GetDataView };
