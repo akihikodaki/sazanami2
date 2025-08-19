@@ -157,10 +157,18 @@ const HelpDialog = (props: { store: Store }) => {
                 <Modal.Title>Help</Modal.Title>
             </Modal.Header>
             <Modal.Body>
-                <ul>
-                    <li><kbd>shift + mouse wheel</kbd> zoom in and out.</li>
-                    <li><kbd>ctrl + mouse wheel</kbd> zoom horizontal only.</li>
-                </ul>
+                {(() => {
+                    const liStyle = { display: "flex", gap: "1rem", marginBottom: "0.5rem" };
+                    const kbdStyle = { minWidth: "160px" };
+                    return (
+                        <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                            <li style={liStyle}><kbd style={kbdStyle}>shift + mouse wheel</kbd><span>zoom in and out.</span></li>
+                            <li style={liStyle}><kbd style={kbdStyle}>ctrl + mouse wheel</kbd><span>zoom horizontal only.</span></li>
+                            <li style={liStyle}><kbd style={kbdStyle}>ctrl + up/down</kbd><span>zoom in and out.</span></li>
+                            <li style={liStyle}><kbd style={kbdStyle}>ctrl + left/right</kbd><span>zoom horizontal only.</span></li>
+                        </ul>
+                    );
+                })()}
             </Modal.Body>
         </Modal>
     );
