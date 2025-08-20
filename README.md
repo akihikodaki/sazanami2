@@ -1,5 +1,13 @@
 # Sazanami2
 
+**Sazanami2** is a visualization tool that reads Tab-Separated Values (TSV) files and plots each column as coordinates.  
+It is built as a single self-contained HTML file, performing all visualization locally in your browser.  
+
+You can either build the HTML from source code, or simply use it directly from the following links:
+
+- Stable version: [https://shioyadan.github.io/sazanami2/](https://shioyadan.github.io/sazanami2/)  
+- Unstable build from the latest master branch: [https://shioyadan.github.io/sazanami2/unstable/](https://shioyadan.github.io/sazanami2/unstable/)  
+
 
 ## Development
 
@@ -31,6 +39,6 @@ make docker-run
 
 ## License
 
-Copyright (C) 2025-2025 Ryota Shioya <shioya@ci.i.u-tokyo.ac.jp>
+Copyright (C) 2025 Ryota Shioya <shioya@ci.i.u-tokyo.ac.jp>
 
 This application is released under the 3-Clause BSD License, see LICENSE.md. This application bundles third-party packages in accordance with the licenses presented in THIRD-PARTY-LICENSES.md.
