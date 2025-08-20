@@ -1,5 +1,4 @@
-import {Loader} from "./loader";
-import {CanvasRenderer} from "./canvas_renderer";
+import { Loader } from "./loader";
 import { FileLineReader } from "./file_line_reader";
 
 enum ACTION {
@@ -24,15 +23,11 @@ class Store {
     handlers_: { [key: number]: Array<(...args: any[]) => void> } = {};
 
     loader: Loader;
-    treeMapRenderer_: CanvasRenderer;
-
-    uiTheme: "dark" | "light" = "dark"; // 現在のUIテーマ
 
     // Settings panelを表示するかどうか
     showSettings: boolean = false;
 
     constructor() {
-        this.treeMapRenderer_ = new CanvasRenderer();
         this.loader = new Loader();
 
         this.on(ACTION.FILE_LOAD, (file: File) => {
