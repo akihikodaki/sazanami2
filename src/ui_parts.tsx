@@ -249,13 +249,15 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
                     onMouseDown={handleSplitterDown}
                     role="separator"
                     aria-orientation="vertical"
-                    style={{ width: 6, cursor: "col-resize", background: "#e6e6e6" }}
+                    className="splitter" 
                 />
             )}
 
             {/* Right panel */}
             {showSettings && (
-                <div style={{ width: rightWidth, minWidth: 200, maxWidth: "70%", borderLeft: "1px solid #ddd", overflow: "auto" }}>
+                <div 
+                    className="splitter-right-panel" 
+                    style={{ width: rightWidth, overflow: "auto" }}>
                     {rightPanel}
                 </div>
             )}
@@ -264,14 +266,40 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
 };
 
 const SettingsPanel: React.FC<{ store: Store }> = ({ store }) => {
+
     return (
-        <div style={{ padding: 12 }}>
-            Settings
+        <div style={{ 
+            display: "flex", flexDirection: "column", height: "100%" 
+        }}>
+            {/* Header */}
+            <div
+                className="settings-header"
+                style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "8px 12px",
+                }}
+            >
+                <div style={{ fontWeight: 600 }}>Settings</div>
+                <button
+                    onClick={() => store.trigger(ACTION.SHOW_SETTINGS, false)}
+                    className="settings-close" 
+                >
+                    ×
+                </button>
+            </div>
+
+            {/* Body*/}
+            <div className="settings-body">
+                <p style={{ margin: 0, opacity: 0.85 }}>
+                    Settings
+                </p>
+            </div>
         </div>
     );
 };
 
-export default SettingsPanel;
 
 
 export {ToolBar, StatusBar, VersionDialog, HelpDialog, SplitContainer, SettingsPanel};

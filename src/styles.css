@@ -26,3 +26,65 @@ html, body, #root {
 .nav-link.tool-bar-link i {
     margin-right: 2px; /* アイコンと文字の間の余白 */
 }
+
+
+
+/* スプリッタ（右パネル左辺） */
+.splitter {
+    width: 6px;
+    cursor: col-resize;
+    background: #191919;
+    user-select: none;
+
+    border-right: solid;
+    border-right-color: #383B41;
+}
+.splitter:hover {
+    background: #2680eb;
+}
+
+/* 右側のパネル領域 */
+.splitter-right-panel {
+    min-width: 200px;
+    max-width: 70%;
+}
+
+/* ヘッダ */
+.settings-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border-bottom: 0.5px solid;
+
+    background-color: #272a31;
+    color: #C9CACB;
+    border-bottom-color: #383B41;
+}
+
+/* 本文 */
+.settings-body {
+    padding: 12px;
+    flex: 1;
+    overflow: auto;
+
+    background-color: #272a31;
+    color: #C9CACB;
+    border-bottom-color: #383B41;
+}
+
+/* 閉じるボタン */
+.settings-close {
+    color: #c9cacb;
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    background: transparent;
+
+    border-radius: 6px;
+    padding: 2px 8px;
+    line-height: 1.2;
+    cursor: pointer;
+}
+
+.settings-close:hover {
+    opacity: 0.7;
+}
