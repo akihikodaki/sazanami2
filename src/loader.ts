@@ -315,15 +315,6 @@ class Loader {
         return this.lineNum - 1;
     }
 
-    public getDictionary(column: string): string[] {
-        const idx = this.headerIndex_[column];
-        if (idx == null) {
-            throw new Error("Invalid column name: " + column);
-        }
-        // stringList のシャローコピーを返す
-        return [...this.columnsArr_[idx].codeToStringList];
-    }
-
     public GetDataView(): DataViewIF {
         return GetDataView(this);
     }
