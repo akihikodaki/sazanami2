@@ -141,7 +141,7 @@ const LoadingBar: React.FC<{ store: Store }> = ({ store }) => {
         <div style={{ background: "transparent"}}>
             <div
                 style={{
-                    height: "4px",
+                    height: "2px",
                     width: progress != null ? `${progress}%` : "0%",
                     backgroundColor: "#007bff", // 青
                 }}
