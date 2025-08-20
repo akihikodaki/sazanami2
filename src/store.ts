@@ -7,6 +7,7 @@ enum ACTION {
     DIALOG_VERSION_OPEN,
     DIALOG_HELP_OPEN,
     MOUSE_MOVE,
+    SHOW_SETTINGS, // 設定パネルの表示
     ACTION_END, // 末尾
 };
 
@@ -15,6 +16,7 @@ enum CHANGE {
     DIALOG_VERSION_OPEN,
     DIALOG_HELP_OPEN,
     MOUSE_MOVE,
+    SHOW_SETTINGS, // 設定パネルの表示
     CHANGE_UI_THEME,
 };
 
@@ -25,6 +27,9 @@ class Store {
     treeMapRenderer_: CanvasRenderer;
 
     uiTheme: "dark" | "light" = "dark"; // 現在のUIテーマ
+
+    // Settings panelを表示するかどうか
+    showSettings: boolean = false;
 
     constructor() {
         this.treeMapRenderer_ = new CanvasRenderer();
@@ -47,6 +52,10 @@ class Store {
         this.on(ACTION.DIALOG_VERSION_OPEN, () => { this.trigger(CHANGE.DIALOG_VERSION_OPEN); });
         this.on(ACTION.DIALOG_HELP_OPEN, () => { this.trigger(CHANGE.DIALOG_HELP_OPEN); });
         this.on(ACTION.MOUSE_MOVE, (str) => { this.trigger(CHANGE.MOUSE_MOVE, str); });
+        this.on(ACTION.SHOW_SETTINGS, (show) => { 
+            this.showSettings = show;
+            this.trigger(CHANGE.SHOW_SETTINGS, show); 
+        });
     }
 
 

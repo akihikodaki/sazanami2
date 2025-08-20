@@ -37,6 +37,7 @@ const ToolBar = (props: {store: Store;}) => {
         case "menu_version":  store.trigger(ACTION.DIALOG_VERSION_OPEN); break;
         case "menu_load": openFile(); break;
         case "menu_keyboard_shortcuts": store.trigger(ACTION.DIALOG_HELP_OPEN); break;
+        case "menu_settings": store.trigger(ACTION.SHOW_SETTINGS, !store.showSettings); break;
         // case "set-dark": store.trigger(ACTION.CHANGE_UI_THEME, "dark"); break;
         // case "set-light": store.trigger(ACTION.CHANGE_UI_THEME, "light"); break;
         }
@@ -70,6 +71,9 @@ const ToolBar = (props: {store: Store;}) => {
                     <NavDropdown.Item eventKey="set-light" active={theme === "light"}>
                         {theme === "light" && <i className="bi bi-check"></i>} Light
                     </NavDropdown.Item> */}
+                    <NavDropdown.Item eventKey="menu_settings">
+                        Settings
+                    </NavDropdown.Item>
                     <NavDropdown.Item eventKey="menu_keyboard_shortcuts">
                         Keyboard shortcuts
                     </NavDropdown.Item>
@@ -174,4 +178,100 @@ const HelpDialog = (props: { store: Store }) => {
     );
 };
 
-export {ToolBar, StatusBar, VersionDialog, HelpDialog};
+
+type SplitContainerProps = {
+    leftPanel: React.ReactNode;
+    rightPanel: React.ReactNode;
+    defaultShowSettings?: boolean;
+    defaultRightWidth?: number;
+    store: Store;
+};
+
+const SplitContainer: React.FC<SplitContainerProps> = ({
+    leftPanel,
+    rightPanel,
+    defaultShowSettings = false,
+    defaultRightWidth = 320,
+    store
+}) => {
+    const containerRef = useRef<HTMLDivElement | null>(null);
+    const draggingRef = useRef(false);
+
+    const [showSettings, setShowSettings] = useState<boolean>(defaultShowSettings);
+    const [rightWidth, setRightWidth] = useState<number>(defaultRightWidth);
+
+    useEffect(() => {
+        const onMouseMove = (e: MouseEvent) => {
+            if (!draggingRef.current || !containerRef.current) return;
+            const rect = containerRef.current.getBoundingClientRect();
+            const xFromRight = rect.right - e.clientX; // distance from cursor to container's right edge
+            const min = 200;
+            const max = Math.max(300, rect.width * 0.7);
+            const next = Math.min(Math.max(xFromRight, min), max);
+            setRightWidth(next);
+        };
+        const onMouseUp = () => {
+            draggingRef.current = false;
+            document.body.style.cursor = "";
+            document.body.style.userSelect = "";
+        };
+        window.addEventListener("mousemove", onMouseMove);
+        window.addEventListener("mouseup", onMouseUp);
+
+        const showSettingsListener = (show: boolean) => {
+            setShowSettings(show);
+        };
+        store.on(CHANGE.SHOW_SETTINGS, showSettingsListener);
+
+        return () => {
+            window.removeEventListener("mousemove", onMouseMove);
+            window.removeEventListener("mouseup", onMouseUp);
+            store.off(CHANGE.SHOW_SETTINGS, showSettingsListener);
+        };
+    }, []);
+
+    const handleSplitterDown = () => {
+        draggingRef.current = true;
+        document.body.style.cursor = "col-resize";
+        document.body.style.userSelect = "none";
+    };
+
+    return (
+        <div style={{ flexGrow: 1, minHeight: 0, display: "flex" }} ref={containerRef}>
+            {/* Left panel */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+                {leftPanel}
+            </div>
+
+            {/* Splitter */}
+            {showSettings && (
+                <div
+                    onMouseDown={handleSplitterDown}
+                    role="separator"
+                    aria-orientation="vertical"
+                    style={{ width: 6, cursor: "col-resize", background: "#e6e6e6" }}
+                />
+            )}
+
+            {/* Right panel */}
+            {showSettings && (
+                <div style={{ width: rightWidth, minWidth: 200, maxWidth: "70%", borderLeft: "1px solid #ddd", overflow: "auto" }}>
+                    {rightPanel}
+                </div>
+            )}
+        </div>
+    );
+};
+
+const SettingsPanel: React.FC<{ store: Store }> = ({ store }) => {
+    return (
+        <div style={{ padding: 12 }}>
+            Settings
+        </div>
+    );
+};
+
+export default SettingsPanel;
+
+
+export {ToolBar, StatusBar, VersionDialog, HelpDialog, SplitContainer, SettingsPanel};
