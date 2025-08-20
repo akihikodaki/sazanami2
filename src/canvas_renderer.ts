@@ -26,6 +26,8 @@ class RendererContext {
     drawnIndex: Int32Array | null = null; 
 }
 
+
+
 class CanvasRenderer {
     MARGIN_LEFT_ = 50;
     MARGIN_BOTTOM_ = 20;
@@ -276,6 +278,42 @@ class CanvasRenderer {
         }
 
         return payload;
+    }
+
+    /**
+     * データ全体（X: 0..maxX-1, Y: minY..maxY）がプロット領域に収まるように
+     * scaleXLog / scaleYLog を設定し、オフセットもリセットする。
+     */
+    fitScaleToData(renderCtx: RendererContext, paddingRatio = 1.0) {
+        if (!renderCtx.dataView) return;
+
+        const { width, height } = renderCtx;
+        const plotWidth  = Math.max(1, width  - this.MARGIN_LEFT_);
+        const plotHeight = Math.max(1, height - this.MARGIN_BOTTOM_);
+
+        const maxX = Math.max(0, renderCtx.dataView.getMaxX());
+        const maxY = Math.max(0, renderCtx.dataView.getMaxY());
+        const minY = Math.max(0, renderCtx.dataView.getMinY ? renderCtx.dataView.getMinY() : 0);
+
+        // X方向は 0..maxX-1 のセル幅
+        const dataPixelWidth  = Math.max(1, maxX * this.BASE_SCALE_X_) * paddingRatio;
+
+        // Y方向は minY..maxY の範囲を収める
+        const baseScaleY = 1;
+        const dataPixelHeight = Math.max(1, (maxY - minY + 1) * baseScaleY) * paddingRatio;
+
+        // 必要スケール
+        const fitScaleX = plotWidth  / dataPixelWidth;
+        const fitScaleY = plotHeight / dataPixelHeight;
+
+        const SAFE_MIN = 1e-6;
+        renderCtx.scaleXLog = Math.log(Math.max(fitScaleX, SAFE_MIN));
+        renderCtx.scaleYLog = Math.log(Math.max(fitScaleY, SAFE_MIN));
+
+        // 左下に minY が来るようにオフセット調整
+        renderCtx.offsetX = 0;
+        renderCtx.offsetY = minY * baseScaleY * Math.exp(renderCtx.scaleYLog);
+        
     }
 }
 

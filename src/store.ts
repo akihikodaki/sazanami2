@@ -8,12 +8,14 @@ enum ACTION {
     MOUSE_MOVE,
     SHOW_SETTINGS, // 設定パネルの表示
     SHOW_MESSAGE_IN_STATUS_BAR,
+    CANVAS_FIT,
     ACTION_END, // 末尾
 };
 
 enum CHANGE {
     FILE_LOADED = ACTION.ACTION_END+1,
     FILE_LOADING_START,
+    FILE_LOAD_PROGRESS,
     FILE_LOADING_END,
     DIALOG_VERSION_OPEN,
     DIALOG_HELP_OPEN,
@@ -22,7 +24,7 @@ enum CHANGE {
     SHOW_MESSAGE_IN_STATUS_BAR,
     CHANGE_UI_THEME,
     CONTENT_UPDATED,
-    FILE_LOAD_PROGRESS,
+    CANVAS_FIT,
 };
 
 class Store {
@@ -66,6 +68,7 @@ class Store {
             this.showSettings = show;
             this.trigger(CHANGE.SHOW_SETTINGS, show); 
         });
+        this.on(ACTION.CANVAS_FIT, () => { this.trigger(CHANGE.CANVAS_FIT); });
     }
 
 

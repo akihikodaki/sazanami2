@@ -188,6 +188,11 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
         store.on(CHANGE.FILE_LOADED, onContentUpdated);
         store.on(CHANGE.FILE_LOADING_START, onFileLoadStarted);
         store.on(CHANGE.CONTENT_UPDATED, onContentUpdated);
+        store.on(CHANGE.CANVAS_FIT, () => {
+            renderer.fitScaleToData(renderCtx, 1.0);
+            const canvasCtx = canvas.getContext("2d")!;
+            renderer.draw(canvasCtx, renderCtx);
+        });
 
         // Cleanup
         return () => {

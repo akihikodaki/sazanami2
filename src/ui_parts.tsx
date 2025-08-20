@@ -6,9 +6,7 @@ import {Nav, Navbar, NavDropdown} from "react-bootstrap";
 import { Modal } from "react-bootstrap";
 
 // react-icons 経由でアイコンをインポートすると，webpack でのビルド時に必要なアイコンのみがバンドルされる
-import { BsList } from 'react-icons/bs';
-import { BsX } from 'react-icons/bs';
-
+import { BsList, BsX, BsArrowsFullscreen } from 'react-icons/bs';
 
 const ToolBar = (props: {store: Store;}) => {
     let store = props.store;
@@ -39,6 +37,7 @@ const ToolBar = (props: {store: Store;}) => {
         case "menu_load": openFile(); break;
         case "menu_keyboard_shortcuts": store.trigger(ACTION.DIALOG_HELP_OPEN); break;
         case "menu_settings": store.trigger(ACTION.SHOW_SETTINGS, !store.showSettings); break;
+        case "menu_fit": store.trigger(ACTION.CANVAS_FIT); break;
         }
         setSelectedKey(0);
     };
@@ -74,7 +73,12 @@ const ToolBar = (props: {store: Store;}) => {
             <Nav onSelect={dispatch} activeKey={selectedKey}
                 style={{ color: "#C9CACB" }} className="me-auto" // このクラスでリンクが左側に配置される
             >
-                {/* <Nav.Link className="nav-link tool-bar-link" eventKey="zoom-in">
+                {
+                <Nav.Link className="nav-link tool-bar-link" eventKey="menu_fit">
+                    <BsArrowsFullscreen size={18} /> Fit
+                </Nav.Link>
+                /* 
+                <Nav.Link className="nav-link tool-bar-link" eventKey="zoom-in">
                     <i className="bi bi-zoom-in"></i> Zoom In                
                 </Nav.Link>
                 <Nav.Link className="nav-link tool-bar-link" eventKey="zoom-out">
