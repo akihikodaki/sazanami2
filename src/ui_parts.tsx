@@ -2,11 +2,12 @@ import React, { useRef, useEffect, useState } from "react";
 import Store, { ACTION, CHANGE } from "./store";
 
 
-import {Nav, Navbar, NavDropdown, Form, FormControl} from "react-bootstrap";
+import {Nav, Navbar, NavDropdown} from "react-bootstrap";
 import { Modal } from "react-bootstrap";
 
 // react-icons 経由でアイコンをインポートすると，webpack でのビルド時に必要なアイコンのみがバンドルされる
 import { BsList } from 'react-icons/bs';
+import { BsX } from 'react-icons/bs';
 
 
 const ToolBar = (props: {store: Store;}) => {
@@ -274,19 +275,14 @@ const SettingsPanel: React.FC<{ store: Store }> = ({ store }) => {
             {/* Header */}
             <div
                 className="settings-header"
-                style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "8px 12px",
-                }}
+                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px" }}
             >
                 <div style={{ fontWeight: 600 }}>Settings</div>
                 <button
                     onClick={() => store.trigger(ACTION.SHOW_SETTINGS, false)}
                     className="settings-close" 
                 >
-                    ×
+                    <BsX size={20} />
                 </button>
             </div>
 
