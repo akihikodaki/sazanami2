@@ -99,7 +99,7 @@ class CanvasRenderer {
     getColorForState_(stateVal: number): string {
         const idx = stateVal;
         const hue = (idx * 137.508) % 360;
-        const color = `hsl(${hue},50%,50%)`;
+        const color = `hsl(${hue},60%,60%)`;
         return color;
     };
 
