@@ -170,7 +170,7 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
         const onFileLoadStarted = () => {
             renderCtx.dataView = null; // データビューをクリア
         };
-        store.on(CHANGE.FILE_LOAD_STARTED, onFileLoadStarted);
+        store.on(CHANGE.FILE_LOADING_START, onFileLoadStarted);
 
         // Cleanup
         return () => {

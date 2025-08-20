@@ -13,7 +13,8 @@ enum ACTION {
 
 enum CHANGE {
     FILE_LOADED = ACTION.ACTION_END+1,
-    FILE_LOAD_STARTED,
+    FILE_LOADING_START,
+    FILE_LOADING_END,
     DIALOG_VERSION_OPEN,
     DIALOG_HELP_OPEN,
     MOUSE_MOVE,
@@ -21,9 +22,7 @@ enum CHANGE {
     SHOW_MESSAGE_IN_STATUS_BAR,
     CHANGE_UI_THEME,
     CONTENT_UPDATED,
-    PROGRESS_BAR_STARTED,
-    PROGRESS_BAR_UPDATED,
-    PROGRESS_BAR_FINISHED,
+    FILE_LOAD_PROGRESS,
 };
 
 class Store {
@@ -39,23 +38,22 @@ class Store {
 
         this.on(ACTION.FILE_LOAD, (file: File) => {
             const reader = new FileLineReader(file);
-            this.trigger(CHANGE.FILE_LOAD_STARTED);
-            this.trigger(CHANGE.PROGRESS_BAR_STARTED);
+            this.trigger(CHANGE.FILE_LOADING_START);
             this.loader.load(
                 reader, 
                 () => {
+                    this.trigger(CHANGE.FILE_LOADING_END);
                     this.trigger(CHANGE.FILE_LOADED);
-                    this.trigger(CHANGE.PROGRESS_BAR_FINISHED);
                     this.trigger(CHANGE.SHOW_MESSAGE_IN_STATUS_BAR, "File loaded successfully");
                 },   // finishCallback
                 (percent, lineNum) => {
-                    this.trigger(CHANGE.PROGRESS_BAR_UPDATED, percent);
+                    this.trigger(CHANGE.FILE_LOAD_PROGRESS, percent);
                     this.trigger(CHANGE.SHOW_MESSAGE_IN_STATUS_BAR, `${Math.floor(percent * 100)}% Loaded`);
                     this.trigger(CHANGE.CONTENT_UPDATED);
                 },   // progressCallback
                 (err) => {
                     console.error(`Error loading file: ${err}`);
-                    this.trigger(CHANGE.PROGRESS_BAR_FINISHED);
+                    this.trigger(CHANGE.FILE_LOADING_END);
                 }    // errorCallback
             );
         });

@@ -112,6 +112,45 @@ const StatusBar = (props: {store: Store;}) => {
     );
 };
 
+/** ファイルロード中のプログレスバー（ツールバー直下に表示） */
+const LoadingBar: React.FC<{ store: Store }> = ({ store }) => {
+    const [visible, setVisible] = useState(false);
+    const [progress, setProgress] = useState<number | null>(null); // null = 不定
+
+    useEffect(() => {
+        const onStart = () => { setVisible(true); setProgress(null); };
+        const onProgress = (val: number) => {
+            setProgress(Math.max(0, Math.min(100, 100*val)));
+        };
+        const onEnd = () => { setVisible(false); setProgress(null); };
+
+        store.on(CHANGE.FILE_LOADING_START, onStart);
+        store.on(CHANGE.FILE_LOAD_PROGRESS, onProgress);
+        store.on(CHANGE.FILE_LOADING_END, onEnd);
+
+        return () => {
+            store.off(CHANGE.FILE_LOADING_START, onStart);
+            store.off(CHANGE.FILE_LOAD_PROGRESS, onProgress);
+            store.off(CHANGE.FILE_LOADING_END, onEnd);
+        };
+    }, [store]);
+
+    if (!visible) return null;
+
+    return (
+        <div style={{ background: "transparent"}}>
+            <div
+                style={{
+                    height: "4px",
+                    width: progress != null ? `${progress}%` : "0%",
+                    backgroundColor: "#007bff", // 青
+                }}
+            />
+        </div>
+    );
+};
+
+
 const VersionDialog = (props: {store: Store;}) => {
     const [show, setShow] = useState(false);
     const handleClose = () => {setShow(false)};
@@ -284,4 +323,4 @@ const SettingsPanel: React.FC<{ store: Store }> = ({ store }) => {
 
 
 
-export {ToolBar, StatusBar, VersionDialog, HelpDialog, SplitContainer, SettingsPanel};
+export {ToolBar, StatusBar, LoadingBar, VersionDialog, HelpDialog, SplitContainer, SettingsPanel};
