@@ -76,6 +76,7 @@ class Loader {
     private detectionDone_: boolean = false;
     private static readonly TYPE_DETECT_COUNT = 2048;
     private static readonly REPORT_INTERVAL = 1024 * 256;
+    private startTime_: number = 0;
 
     constructor() {
         this.reset();
@@ -91,20 +92,23 @@ class Loader {
         this.detection_ = {};
         this.detectionCount_ = 0;
         this.detectionDone_ = false;
+        this.startTime_ = 0;
     }
 
     load(
         reader: FileLineReader,
         finishCallback: () => void,
-        progressCallback: (lineNum: number, line: string) => void,
+        progressCallback: (progress: number, lineNum: number) => void,
         errorCallback: (error: any, lineNum: number) => void
     ) {
         this.reset();
+        this.startTime_ = (new Date()).getTime();
+
         reader.load(
             (line: string) => { // onLineRead
                 this.parseLine_(line, errorCallback);
                 if (this.lineNum % Loader.REPORT_INTERVAL === 0) {
-                    progressCallback(this.lineNum, line);
+                    progressCallback(reader.getProgress(), this.lineNum);
                 }
                 this.lineNum++;
             },
@@ -112,6 +116,8 @@ class Loader {
                 if (!this.detectionDone_) {
                     this.finalizeTypes_();
                 }
+                let elapsed = ((new Date()).getTime() - this.startTime_);
+                console.log(`Loaded ${this.lineNum - 1} lines in ${elapsed} ms`);
                 finishCallback();
             },
             (error: any) => {   // onError

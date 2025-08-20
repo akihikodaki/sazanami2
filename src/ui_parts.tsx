@@ -94,6 +94,9 @@ const StatusBar = (props: {store: Store;}) => {
         store.on(CHANGE.MOUSE_MOVE, (message: string) => {
             setStatusBarMessage(message);
         });
+        store.on(CHANGE.SHOW_MESSAGE_IN_STATUS_BAR, (message: string) => {
+            setStatusBarMessage(message);
+        });
     }, []);
 
     return (

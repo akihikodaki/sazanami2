@@ -7,16 +7,23 @@ enum ACTION {
     DIALOG_HELP_OPEN,
     MOUSE_MOVE,
     SHOW_SETTINGS, // 設定パネルの表示
+    SHOW_MESSAGE_IN_STATUS_BAR,
     ACTION_END, // 末尾
 };
 
 enum CHANGE {
     FILE_LOADED = ACTION.ACTION_END+1,
+    FILE_LOAD_STARTED,
     DIALOG_VERSION_OPEN,
     DIALOG_HELP_OPEN,
     MOUSE_MOVE,
     SHOW_SETTINGS, // 設定パネルの表示
+    SHOW_MESSAGE_IN_STATUS_BAR,
     CHANGE_UI_THEME,
+    CONTENT_UPDATED,
+    PROGRESS_BAR_STARTED,
+    PROGRESS_BAR_UPDATED,
+    PROGRESS_BAR_FINISHED,
 };
 
 class Store {
@@ -32,14 +39,23 @@ class Store {
 
         this.on(ACTION.FILE_LOAD, (file: File) => {
             const reader = new FileLineReader(file);
+            this.trigger(CHANGE.FILE_LOAD_STARTED);
+            this.trigger(CHANGE.PROGRESS_BAR_STARTED);
             this.loader.load(
                 reader, 
                 () => {
                     this.trigger(CHANGE.FILE_LOADED);
+                    this.trigger(CHANGE.PROGRESS_BAR_FINISHED);
+                    this.trigger(CHANGE.SHOW_MESSAGE_IN_STATUS_BAR, "File loaded successfully");
                 },   // finishCallback
-                () => {},   // progressCallback
+                (percent, lineNum) => {
+                    this.trigger(CHANGE.PROGRESS_BAR_UPDATED, percent);
+                    this.trigger(CHANGE.SHOW_MESSAGE_IN_STATUS_BAR, `${Math.floor(percent * 100)}% Loaded`);
+                    this.trigger(CHANGE.CONTENT_UPDATED);
+                },   // progressCallback
                 (err) => {
                     console.error(`Error loading file: ${err}`);
+                    this.trigger(CHANGE.PROGRESS_BAR_FINISHED);
                 }    // errorCallback
             );
         });
@@ -47,6 +63,7 @@ class Store {
         this.on(ACTION.DIALOG_VERSION_OPEN, () => { this.trigger(CHANGE.DIALOG_VERSION_OPEN); });
         this.on(ACTION.DIALOG_HELP_OPEN, () => { this.trigger(CHANGE.DIALOG_HELP_OPEN); });
         this.on(ACTION.MOUSE_MOVE, (str) => { this.trigger(CHANGE.MOUSE_MOVE, str); });
+        this.on(ACTION.SHOW_MESSAGE_IN_STATUS_BAR, (str) => { this.trigger(CHANGE.SHOW_MESSAGE_IN_STATUS_BAR, str); });
         this.on(ACTION.SHOW_SETTINGS, (show) => { 
             this.showSettings = show;
             this.trigger(CHANGE.SHOW_SETTINGS, show); 
