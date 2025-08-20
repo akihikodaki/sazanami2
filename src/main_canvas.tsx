@@ -185,6 +185,8 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
 
     const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
         e.preventDefault();
+        canvasRef.current!.style.cursor = "default";
+
         const file = e.dataTransfer.files[0];
         if (file) {
             store.trigger(ACTION.FILE_LOAD, file);
