@@ -3,7 +3,7 @@ export class FileLineReader {
     private decoder = new TextDecoder('utf-8');
     private buffer = '';
     private bytesRead = 0; // 読み取ったバイト数を累積
-    private numBufferUpdate = 0;    // バッファ更新回数
+    private numLine_ = 0;    // バッファ更新回数
 
     constructor(private file: File) {
         this.reader = this.file.stream().getReader();
@@ -25,18 +25,18 @@ export class FileLineReader {
      * トレイリング改行なしの文字列を返すか、EOF で null を返す。
      */
     private async readLine(): Promise<string | null> {
+        this.numLine_++;
+        if (this.numLine_ % 50000 === 0) {
+            // UI の更新を待つために一瞬スリープをいれる
+            await new Promise(r => setTimeout(r, 0));
+        }
+
         // まずバッファ内に改行がないかチェック
         let newlineIndex = this.buffer.indexOf('\n');
         if (newlineIndex !== -1) {
             const line = this.buffer.slice(0, newlineIndex);
             this.buffer = this.buffer.slice(newlineIndex + 1);
             return line;
-        }
-
-        this.numBufferUpdate++;
-        if (this.numBufferUpdate % 10 === 0) {
-            // UI の更新を待つために一瞬スリープをいれる
-            await new Promise(r => setTimeout(r, 0));
         }
 
         // 改行がなければストリームから追加読み込み
