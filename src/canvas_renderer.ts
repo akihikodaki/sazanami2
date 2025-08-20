@@ -114,7 +114,7 @@ class CanvasRenderer {
         const plotHeight = height - this.MARGIN_BOTTOM_;
         const plotWidth = width - this.MARGIN_LEFT_;
         // const baseScaleY = plotHeight / (dataView.getMaxY() + 1);
-        const baseScaleY = plotHeight / (this.BASE_HEIGHT_ + 1);
+        const baseScaleY = 1;//plotHeight / (this.BASE_HEIGHT_ + 1);
 
         // 表示セル数
         const visibleCols = Math.ceil((width - this.MARGIN_LEFT_) / (this.BASE_SCALE_X_ * scaleX));

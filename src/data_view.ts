@@ -8,6 +8,7 @@ interface DataViewIF {
     getEndIdx(yEnd: number): number;
     getMaxX(): number;
     getMaxY(): number;
+    getMinY(): number;
     test(headers: string[]): boolean;
 }
 
@@ -16,7 +17,8 @@ class OpenCL_DataView implements DataViewIF {
     cus_ = new ColumnBuffer();
     wfs_ = new ColumnBuffer();
     states_ = new ColumnBuffer();
-    maxCycle_ = 0;
+    maxY_ = 0;
+    minY_ = 0;
     maxWf_ = 0;
     maxCu_ = 0;
     maxX_ = 0;
@@ -34,7 +36,8 @@ class OpenCL_DataView implements DataViewIF {
         this.maxWf_ = stats["wf"].max;
 
         this.maxX_ = (this.maxCu_ + 1) * (this.maxWf_ + 1);
-        this.maxCycle_ = stats["cycle"].max;
+        this.maxY_ = stats["cycle"].max;
+        this.minY_ = stats["cycle"].min;
 
         this.numRows_ = loader.numRows;
     }
@@ -75,7 +78,10 @@ class OpenCL_DataView implements DataViewIF {
         return this.maxX_;
     }
     getMaxY(): number {
-        return this.maxCycle_;
+        return this.maxY_;
+    }
+    getMinY(): number {
+        return this.minY_;
     }
 };
 
@@ -121,6 +127,9 @@ class TAGE_DataView implements DataViewIF {
     }
     getMaxY(): number {
         return this.numRows_;
+    }
+    getMinY(): number {
+        return 0;
     }
 };
 
@@ -176,6 +185,9 @@ class GenericDataView implements DataViewIF {
     }
     getMaxY(): number {
         return this.y_.stat.max;
+    }
+    getMinY(): number {
+        return this.y_.stat.min;
     }
 };
 

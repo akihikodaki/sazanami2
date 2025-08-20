@@ -169,8 +169,19 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
             renderer.clear(canvasCtx, renderCtx);
         };
         const onContentUpdated = () => {
+            let firstTime = !renderCtx.dataView;
             renderCtx.dataView = store.loader.GetDataView();
             renderCtx.numRows = store.loader.numRows;
+            // 初回表示で範囲外だったらリセット
+            if (firstTime) {
+                if (renderCtx.offsetY + renderCtx.height < renderCtx.dataView.getMinY()) {
+                    renderCtx.offsetY = renderCtx.dataView.getMinY();
+                }
+                if (renderCtx.offsetY > renderCtx.dataView.getMaxY()) {
+                    renderCtx.offsetY = renderCtx.dataView.getMaxY() - renderCtx.height;
+                }
+            }
+
             const canvasCtx = canvas.getContext("2d")!;
             renderer.draw(canvasCtx, renderCtx);
         };
