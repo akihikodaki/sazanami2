@@ -42,12 +42,7 @@ class OpenCL_DataView implements DataViewIF {
     test(headers: string[]): boolean {
         // headers に expectedHeaders が含まれているかチェック
         const expectedHeaders = ["cycle", "cu", "wf", "state"];
-        for (const h of expectedHeaders) {
-            if (!headers.includes(h)) {
-                return false;
-            }
-        }
-        return true;
+        return expectedHeaders.every(h => headers.includes(h));
     }
 
     getX(i: number): number {
@@ -81,6 +76,51 @@ class OpenCL_DataView implements DataViewIF {
     }
     getMaxY(): number {
         return this.maxCycle_;
+    }
+};
+
+class TAGE_DataView implements DataViewIF {
+    x_ = new ColumnBuffer();
+    x2_ = new ColumnBuffer();
+    states_: null | ColumnBuffer = new ColumnBuffer();
+    numRows_ = 0; // 行数
+
+    test(headers: string[]): boolean {
+        // headers に expectedHeaders が含まれているかチェック
+        const expectedHeaders = ["ProgramCounter", "Actual", "Pred", "Select", "TblIdx", "Bank"];
+        return expectedHeaders.every(h => headers.includes(h));
+    }
+
+    init(loader: Loader) {
+        const columns = loader.columns;
+        const headers = loader.headers;
+        this.x_ = loader.columnFromName("Bank");
+        this.x2_ = loader.columnFromName("TblIdx");
+        this.states_ = loader.columnFromName("Actual");
+        this.numRows_ = loader.numRows;
+    }
+
+    getX(i: number): number {
+        return this.x_.getNumber(i) * 8 + this.x2_.getNumber(i) % 8;
+    };
+    getY(i: number): number { 
+        return i; 
+    }
+    getState(i: number): number {
+        return this.states_ ? this.states_.getNumber(i) : 0;
+    }
+    getStartIdx(yStart: number): number {
+        return Math.max(yStart, 0);
+    }
+    getEndIdx(yEnd: number): number {
+        return Math.min(yEnd, this.numRows_);
+    }
+
+    getMaxX(): number {
+        return this.x_.stat.max * 8;
+    }
+    getMaxY(): number {
+        return this.numRows_;
     }
 };
 
@@ -141,7 +181,7 @@ class GenericDataView implements DataViewIF {
 
 
 const GetDataView = (loader: Loader): DataViewIF => {
-    const candidates = [OpenCL_DataView, GenericDataView];
+    const candidates = [OpenCL_DataView, TAGE_DataView, GenericDataView];
 
     for (const ViewClass of candidates) {
         const view = new ViewClass();
