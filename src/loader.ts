@@ -1,8 +1,8 @@
 import { FileLineReader } from "./file_line_reader";
 import { GetDataView, DataViewIF } from "./data_view";
 
-// カラムデータは整数列ならInt32Array、文字列列なら文字列配列
-type ParsedColumns = { [column: string]: ColumnBuffer };
+// STRING_CODE は，同一の文字列に対して連続したコードを割り当てる
+// 文字列が多い場合は RAW_STRING にする
 enum ColumnType { INTEGER, HEX, STRING_CODE, RAW_STRING};
 
 class ColumnStats {
@@ -10,21 +10,23 @@ class ColumnStats {
     max: number = -Infinity;
 }
 
-// 動的に拡張可能な整数バッファ
+// 動的に拡張可能なバッファ
 class ColumnBuffer {
     private static readonly INITIAL_CAPACITY = 1024;
 
-    buffer: Int32Array;
+    // 格納タイプに応じて，buffer か string で持つかを変える
     type: ColumnType;
+    length: number;
+
+    buffer: Int32Array;
+    rawStringList: string[]; // raw 文字列
 
     // 文字列の種類が少ない場合，code で保持し，圧縮して持つ
     // code は 0 から始まる連続値
     stringToCodeDict: { [value: string]: number };  // 文字列に対応する code を格納
     codeToStringList: string[];                     // code に対応する文字列のリスト
 
-    rawStringList: string[];                   // 文字列列用の文字列リスト
-    length: number;
-
+    // 統計情報
     stat: ColumnStats;
 
     constructor() {
@@ -35,15 +37,6 @@ class ColumnBuffer {
         this.codeToStringList = [];
         this.rawStringList = [];
         this.stat = new ColumnStats();
-    }
-
-    get(index: number): number|string {
-        if (this.type == ColumnType.RAW_STRING) {
-            return this.rawStringList[index];
-        }
-        else {
-            return this.buffer[index];
-        }
     }
 
     getString(index: number): string {
@@ -151,6 +144,8 @@ class Loader {
             this.parseHeader_(line);
         } else {
             let values = line.split("\t");
+
+            // カラムに過不足がある場合
             if (values.length > this.headers_.length) {
                 this.numWarning++;
                 if (this.numWarning <= 10) {
@@ -164,10 +159,12 @@ class Loader {
             while (values.length < this.headers_.length) {
                 values.push("");    // 不足分は空文字で埋める
             }
-            if (!this.detectionDone_) { // 一定の行数までは型検出を行う
+
+            // TYPE_DETECT_COUNT までは型検出を行う
+            if (!this.detectionDone_) { 
                 this.detectionCount_++;
                 values.forEach((raw, index) => {
-                    this.detectTypePhase_(this.headers_[index], raw ?? ""); // null or undefined to empty string
+                    this.detectType_(this.headers_[index], raw ?? ""); // null or undefined to empty string
                 });
                 if (this.detectionCount_ === Loader.TYPE_DETECT_COUNT) {
                     this.finalizeTypes_();
@@ -183,10 +180,12 @@ class Loader {
     }
 
 
-    private detectTypePhase_(header: string, value: string): void {
+    private detectType_(header: string, value: string): void {
         this.rawBuffer_[header].push(value);
         const isHex = /^(?:0[xX])?[0-9A-Fa-f]+$/.test(value);
         const isInt = /^-?\d+$/.test(value);
+
+        // 16進数が現れたら HEX に変更
         if (this.detection_[header] < ColumnType.HEX && isHex && !isInt) {
             this.detection_[header] = ColumnType.HEX;
         }
@@ -223,17 +222,26 @@ class Loader {
         }
     }
 
-    /** Int32Array bufferに数値を追加 (整数・16進 or 10進) */
-    private pushBufferValue_(index: number, raw: string): void {
+    // バッファサイズを拡張する
+    private resizeBuffer_(index: number): void {
         const col = this.columnsArr_[index];
-        const num = col.type === ColumnType.HEX ? parseInt(raw, 16) : parseInt(raw, 10);
         if (col.length >= col.buffer.length) {
             const newBuf = new Int32Array(col.buffer.length * 2);
             newBuf.set(col.buffer);
             col.buffer = newBuf;
         }
+    }
+
+    /** Int32Array bufferに数値を追加 (整数・16進 or 10進) */
+    private pushBufferValue_(index: number, raw: string): void {
+        const col = this.columnsArr_[index];
+        const num = col.type === ColumnType.HEX ? parseInt(raw, 16) : parseInt(raw, 10);
+        if (col.length >= col.buffer.length) {
+            this.resizeBuffer_(index);
+        }
         col.buffer[col.length] = num;
         col.length++;
+
         // stats更新
         const stat = col.stat;
         if (num < stat.min) stat.min = num;
@@ -255,9 +263,7 @@ class Loader {
         // bufferに追加
         const col = this.columnsArr_[index];
         if (col.length >= col.buffer.length) {
-            const newBuf = new Int32Array(col.buffer.length * 2);
-            newBuf.set(col.buffer);
-            col.buffer = newBuf;
+            this.resizeBuffer_(index);
         }
         col.buffer[col.length] = code;
         col.length++;
@@ -309,18 +315,6 @@ class Loader {
         return this.lineNum - 1;
     }
 
-    public getOriginalString(column: string, code: number): string {
-        const idx = this.headerIndex_[column];
-        if (idx == null) {
-            throw new Error("Invalid column name: " + column);
-        }
-        const list = this.columnsArr_[idx].codeToStringList;
-        if (code < 0 || code >= list.length) {
-            throw new Error(`Invalid code ${code} for column ${column}`);
-        }
-        return list[code];
-    }
-
     public getDictionary(column: string): string[] {
         const idx = this.headerIndex_[column];
         if (idx == null) {
@@ -335,4 +329,4 @@ class Loader {
     }
 }
 
-export { Loader, ParsedColumns, ColumnType, ColumnBuffer, DataViewIF };
+export { Loader, ColumnType, ColumnBuffer, DataViewIF };

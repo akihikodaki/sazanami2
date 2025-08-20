@@ -1,4 +1,4 @@
-import { Loader, ParsedColumns, ColumnBuffer } from "./loader";
+import { Loader, ColumnBuffer } from "./loader";
 
 interface DataViewIF {
     getX(i: number): number;
