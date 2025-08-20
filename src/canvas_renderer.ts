@@ -30,21 +30,10 @@ class CanvasRenderer {
     MARGIN_LEFT_ = 50;
     MARGIN_BOTTOM_ = 20;
     BASE_SCALE_X_ = 20;
-    ZOOM_STEP_LOG_ = Math.log(1.1); // 対数ズーム量
+    BASE_HEIGHT_ = 1000;
+    ZOOM_STEP_LOG_ = Math.log(1.2); // 対数ズーム量
 
     constructor() {}
-
-    initRendererContext(ctx: RendererContext, loader: Loader) {
-        // set data context and grid dimensions
-        ctx.dataView = loader.GetDataView();
-
-        // スケールは対数で 0 (= 1.0) に初期化
-        ctx.scaleXLog = 0;
-        ctx.scaleYLog = 0;
-        ctx.offsetX = 0;
-        ctx.offsetY = 0;
-        ctx.numRows = loader.numRows;
-    };
 
     // uniform zoom
     // renderCtx を更新（対数スケールを加減算で更新）
@@ -103,20 +92,29 @@ class CanvasRenderer {
         return color;
     };
 
+    // 背景クリア
+    clear(canvasCtx: CanvasRenderingContext2D, renderCtx: RendererContext) {
+        if (!canvasCtx) return;
+        const { width, height } = renderCtx;
+        canvasCtx.fillStyle = '#1c1e23';
+        canvasCtx.fillRect(0, 0, width, height);
+    }
+
+
     draw(canvasCtx: CanvasRenderingContext2D, renderCtx: RendererContext) {
+        if (!canvasCtx) return;
+
         const { width, height, dataView, offsetX, offsetY } = renderCtx;
         const scaleX = renderCtx.scaleX;
         const scaleY = renderCtx.scaleY;
-        if (!canvasCtx) return;
 
-        // 背景クリア
-        canvasCtx.fillStyle = '#1c1e23';
-        canvasCtx.fillRect(0, 0, width, height);
+        this.clear(canvasCtx, renderCtx);
 
         if (!dataView) return;
         const plotHeight = height - this.MARGIN_BOTTOM_;
         const plotWidth = width - this.MARGIN_LEFT_;
-        const baseScaleY = plotHeight / (dataView.getMaxY() + 1);
+        // const baseScaleY = plotHeight / (dataView.getMaxY() + 1);
+        const baseScaleY = plotHeight / (this.BASE_HEIGHT_ + 1);
 
         // 表示セル数
         const visibleCols = Math.ceil((width - this.MARGIN_LEFT_) / (this.BASE_SCALE_X_ * scaleX));
