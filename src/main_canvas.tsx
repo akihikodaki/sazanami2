@@ -167,6 +167,10 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
             renderer.draw(canvasCtx, renderCtx);
         };
         store.on(CHANGE.FILE_LOADED, onFileLoaded);
+        const onFileLoadStarted = () => {
+            renderCtx.dataView = null; // データビューをクリア
+        };
+        store.on(CHANGE.FILE_LOAD_STARTED, onFileLoadStarted);
 
         // Cleanup
         return () => {
