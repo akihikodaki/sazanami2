@@ -161,16 +161,22 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
         handleResize();
 
         // Store change handler
-        const onFileLoaded = () => {
-            renderer.initRendererContext(renderCtx, store.loader);
+        const onFileLoadStarted = () => {
+            renderCtx.dataView = null; // データビューをクリア
+            renderCtx.numRows = 0;
+            handleResize();
+            const canvasCtx = canvas.getContext("2d")!;
+            renderer.clear(canvasCtx, renderCtx);
+        };
+        const onContentUpdated = () => {
+            renderCtx.dataView = store.loader.GetDataView();
+            renderCtx.numRows = store.loader.numRows;
             const canvasCtx = canvas.getContext("2d")!;
             renderer.draw(canvasCtx, renderCtx);
         };
-        store.on(CHANGE.FILE_LOADED, onFileLoaded);
-        const onFileLoadStarted = () => {
-            renderCtx.dataView = null; // データビューをクリア
-        };
+        store.on(CHANGE.FILE_LOADED, onContentUpdated);
         store.on(CHANGE.FILE_LOADING_START, onFileLoadStarted);
+        store.on(CHANGE.CONTENT_UPDATED, onContentUpdated);
 
         // Cleanup
         return () => {
