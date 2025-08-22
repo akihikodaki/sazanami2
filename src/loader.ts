@@ -51,7 +51,8 @@ class ColumnBuffer {
     }
 
     getNumber(index: number): number {
-        if (this.type === ColumnType.RAW_STRING || this.type === ColumnType.STRING_CODE) {
+        // 色づけの際にコードが取得される場合がある
+        if (this.type === ColumnType.RAW_STRING) {
             throw new Error("Cannot get number from string column");
         }
         return this.buffer[index];
