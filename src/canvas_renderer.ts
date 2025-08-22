@@ -145,7 +145,7 @@ class CanvasRenderer {
 
         // 描画まびき
         const step = Math.max(1, Math.floor(ratioY / 32));
-        if (ratioY >= 32) {
+        if (ratioY >= 256) {
             canvasCtx.fillStyle = "hsl(0,0%,70%)";
         }
 
@@ -158,7 +158,7 @@ class CanvasRenderer {
             const xVal = dataView.getX(i);
             const x = this.MARGIN_LEFT_ + xVal * this.BASE_SCALE_X_ * scaleX - offsetX;
             const y = yVal * baseScaleY * scaleY - offsetY;
-            if (ratioY < 32) {
+            if (ratioY < 256) {
                 canvasCtx.fillStyle = this.getColorForState_(dataView.getState(i));
             }
             canvasCtx.fillRect(x, y, pxW, pxH);
