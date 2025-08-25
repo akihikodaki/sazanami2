@@ -106,6 +106,12 @@
 │  ├─ email: monastic.panic@gmail.com
 │  ├─ path: node_modules/dom-helpers
 │  └─ licenseFile: node_modules/dom-helpers/LICENSE
+├─ fzstd@0.1.1
+│  ├─ licenses: MIT
+│  ├─ repository: https://github.com/101arrowz/fzstd
+│  ├─ publisher: Arjun Barrett
+│  ├─ path: node_modules/fzstd
+│  └─ licenseFile: node_modules/fzstd/LICENSE
 ├─ invariant@2.2.4
 │  ├─ licenses: MIT
 │  ├─ repository: https://github.com/zertosh/invariant
@@ -158,6 +164,12 @@
 │  ├─ repository: https://github.com/facebook/react
 │  ├─ path: node_modules/react-dom
 │  └─ licenseFile: node_modules/react-dom/LICENSE
+├─ react-icons@5.5.0
+│  ├─ licenses: MIT
+│  ├─ repository: https://github.com/react-icons/react-icons
+│  ├─ publisher: Goran Gajic
+│  ├─ path: node_modules/react-icons
+│  └─ licenseFile: node_modules/react-icons/LICENSE
 ├─ react-is@16.13.1
 │  ├─ licenses: MIT
 │  ├─ repository: https://github.com/facebook/react
