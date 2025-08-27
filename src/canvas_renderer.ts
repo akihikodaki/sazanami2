@@ -115,12 +115,10 @@ class CanvasRenderer {
         if (!dataView) return;
         const plotHeight = height - this.MARGIN_BOTTOM_;
         const plotWidth = width - this.MARGIN_LEFT_;
-        // const baseScaleY = plotHeight / (dataView.getMaxY() + 1);
-        const baseScaleY = 1;//plotHeight / (this.BASE_HEIGHT_ + 1);
 
         // 表示セル数
         const visibleCols = Math.ceil((width - this.MARGIN_LEFT_) / (this.BASE_SCALE_X_ * scaleX));
-        const visibleRows = Math.ceil(plotHeight / (baseScaleY * scaleY));
+        const visibleRows = Math.ceil(plotHeight / scaleY);
 
         // グリッドの上限を設定
         const MAX_RES = 128;
@@ -128,15 +126,15 @@ class CanvasRenderer {
         const gridRows = Math.min(visibleRows, MAX_RES);
 
         // 1ピクセルに描画される論理高さ
-        const ratioY = 1 / (baseScaleY * scaleY); 
+        const ratioY = 1 / scaleY; 
 
         // データ描画用ピクセルサイズ
         const pxW = Math.max(this.BASE_SCALE_X_ * scaleX, ratioY > 32 ? 0.5 : 1);
-        const pxH = Math.max(baseScaleY * scaleY, ratioY > 32 ? 0.5 : 1);
+        const pxH = Math.max(scaleY, ratioY > 32 ? 0.5 : 1);
 
         // 描画セルの start/end インデックス
         const xStart = Math.floor((offsetX - this.MARGIN_LEFT_) / (this.BASE_SCALE_X_ * scaleX));
-        const yStart = Math.floor(offsetY / (baseScaleY * scaleY));
+        const yStart = Math.floor(offsetY / scaleY);
         const startIdx = dataView.getStartIdx(yStart);
         const endIdx   = dataView.getEndIdx(yStart + visibleRows - 1);
 
@@ -157,7 +155,7 @@ class CanvasRenderer {
             }
             const xVal = dataView.getX(i);
             const x = this.MARGIN_LEFT_ + xVal * this.BASE_SCALE_X_ * scaleX - offsetX;
-            const y = yVal * baseScaleY * scaleY - offsetY;
+            const y = yVal * scaleY - offsetY;
             if (ratioY < 256) {
                 canvasCtx.fillStyle = this.getColorForState_(dataView.getState(i));
             }
@@ -196,11 +194,11 @@ class CanvasRenderer {
         canvasCtx.textAlign = 'right';
         canvasCtx.textBaseline = 'middle';
         const pixelMinSpacingY = 40;
-        const rawDataSpacingY = pixelMinSpacingY / (baseScaleY * scaleY);
+        const rawDataSpacingY = pixelMinSpacingY / scaleY;
         let tickSpacingY = this.niceNum_(rawDataSpacingY);
         tickSpacingY = tickSpacingY < 1 ? 1 : tickSpacingY; // 最小値を 1 に設定
         for (let val = 0; val <= dataView.getMaxY(); val += tickSpacingY) {
-            const y = val * baseScaleY * scaleY - offsetY;
+            const y = val * scaleY - offsetY;
             if (y < 0) continue;
             if (y > plotHeight) break;
             canvasCtx.strokeStyle = '#444';
@@ -237,12 +235,10 @@ class CanvasRenderer {
 
         // 共通パラメータ
         const plotHeight = renderCtx.height - this.MARGIN_BOTTOM_;
-        const maxY = renderCtx.dataView.getMaxY();
-        const baseScaleY = plotHeight / (maxY + 1);
 
         // 可視セル数（カラム数・行数）
         const visibleCols = Math.ceil((renderCtx.width - this.MARGIN_LEFT_) / (this.BASE_SCALE_X_ * renderCtx.scaleX));
-        const visibleRows = Math.ceil(plotHeight         / (baseScaleY * renderCtx.scaleY));
+        const visibleRows = Math.ceil(plotHeight / renderCtx.scaleY);
 
         // 最大解像度制限
         const MAX_RES = 128;
@@ -250,10 +246,10 @@ class CanvasRenderer {
         const gridRows = Math.min(visibleRows, MAX_RES);
 
         const xStart = Math.floor((renderCtx.offsetX - this.MARGIN_LEFT_) / (this.BASE_SCALE_X_ * renderCtx.scaleX));
-        const yStart = Math.floor(renderCtx.offsetY / (baseScaleY * renderCtx.scaleY));
+        const yStart = Math.floor(renderCtx.offsetY / renderCtx.scaleY);
 
         const xVal = Math.floor((mouseX - this.MARGIN_LEFT_ + renderCtx.offsetX) / (this.BASE_SCALE_X_ * renderCtx.scaleX));
-        const yVal = Math.floor((mouseY + renderCtx.offsetY) / (baseScaleY * renderCtx.scaleY));
+        const yVal = Math.floor((mouseY + renderCtx.offsetY) / renderCtx.scaleY);
         const col = xVal - xStart;
         const row = yVal - yStart;
 
