@@ -73,6 +73,8 @@ class Loader {
     // 型検出用
     private rawBuffer_: { [column: string]: string[] } = {};
     private detection_: { [column: string]: ColumnType } = {};
+    private rawStringMap_: { [column: string]: { [value: string]: number } } = {};
+
     private detectionCount_: number = 0;
     private detectionDone_: boolean = false;
     private static readonly TYPE_DETECT_COUNT = 2048;
@@ -91,6 +93,7 @@ class Loader {
         this.columnsArr_ = [];
         this.rawBuffer_ = {};
         this.detection_ = {};
+        this.rawStringMap_ = {};
         this.detectionCount_ = 0;
         this.detectionDone_ = false;
         this.startTime_ = 0;
@@ -132,12 +135,13 @@ class Loader {
         let values = line.split("\t");
         this.headers_ = values;
 
-        // 全てIntegerColumnBufferで初期化
+        // データ列とタイプ検出用変数の初期化
         this.columnsArr_ = values.map((_, i) => (new ColumnBuffer()));
         values.forEach((header, i) => {
             this.headerIndex_[header] = i;
             this.rawBuffer_[header] = [];
             this.detection_[header] = ColumnType.INTEGER; // 初期は整数列
+            this.rawStringMap_[header] = {};
         });
     }
 
@@ -200,14 +204,19 @@ class Loader {
         if (this.detection_[header] < ColumnType.STRING_CODE && !isHex && !isInt) {
             this.detection_[header] = ColumnType.STRING_CODE;
         }
-        // 文字列が中に空白を含んでいるか，32文字より長い場合は文字列型に変更
-        if (this.detection_[header] === ColumnType.STRING_CODE && (value.length > 32 || value.includes(" "))) {
-            this.detection_[header] = ColumnType.RAW_STRING;
+        // 文字列の出現パターン数をカウントし，finalizeTypes_ で判定
+        if (this.detection_[header] === ColumnType.STRING_CODE) {
+            this.rawStringMap_[header][value] += 1;
         }
     }
 
     private finalizeTypes_(): void {
         this.headers_.forEach((header, index) => {
+            // 文字列の出現パターン数をカウントし，一定割合を超えていたら raw string に
+            if (Object.keys(this.rawStringMap_[header]).length > Loader.TYPE_DETECT_COUNT / 3) {
+                this.detection_[header] = ColumnType.RAW_STRING;
+            }
+
             const type = this.detection_[header];
             this.columnsArr_[index].type = type;
             // rawBufferからデータをバッファへ反映
