@@ -50,6 +50,7 @@ export class FileLineReader {
     private numLine_ = 0;
     private initialized_ = false;
     private isZstd_ = false;
+    private canceled_ = false;
 
     constructor(private file_: File) {
     }
@@ -89,6 +90,7 @@ export class FileLineReader {
         if (this.numLine_ % 50000 === 0) {
             // UI の更新を待つために一瞬スリープをいれる
             await new Promise(r => setTimeout(r, 0)); 
+            if (this.canceled_) return null;
         }
 
         // まず内部バッファを確認
@@ -143,9 +145,18 @@ export class FileLineReader {
             while ((line = await this.readLine_()) !== null) {
                 onLineRead(line);
             }
+            if (this.canceled_) 
+                return;
             finishCallback();
         } catch (e) {
             errorCallback(e);
+        }
+    }
+
+    cancel() {
+        if (this.reader_) {
+            this.reader_.cancel();
+            this.canceled_ = true;
         }
     }
 }

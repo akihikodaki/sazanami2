@@ -39,10 +39,9 @@ class Store {
         this.loader = new Loader();
 
         this.on(ACTION.FILE_LOAD, (file: File) => {
-            const reader = new FileLineReader(file);
             this.trigger(CHANGE.FILE_LOADING_START);
             this.loader.load(
-                reader, 
+                file, 
                 () => {
                     this.trigger(CHANGE.FILE_LOADING_END);
                     this.trigger(CHANGE.FILE_LOADED);

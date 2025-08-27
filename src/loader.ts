@@ -80,6 +80,9 @@ class Loader {
     private static readonly TYPE_DETECT_COUNT = 2048;
     private static readonly REPORT_INTERVAL = 1024 * 256;
     private startTime_: number = 0;
+    private reader_: FileLineReader | null = null;
+
+    get detectionDone() { return this.detectionDone_; }
 
     constructor() {
         this.reset();
@@ -97,15 +100,21 @@ class Loader {
         this.detectionCount_ = 0;
         this.detectionDone_ = false;
         this.startTime_ = 0;
+        if (this.reader_) {
+            this.reader_.cancel();
+            this.reader_ = null;
+        }
     }
 
     load(
-        reader: FileLineReader,
+        file: File,
         finishCallback: () => void,
         progressCallback: (progress: number, lineNum: number) => void,
         errorCallback: (error: any, lineNum: number) => void
     ) {
         this.reset();
+        let reader = new FileLineReader(file);
+        this.reader_ = reader;
         this.startTime_ = (new Date()).getTime();
 
         reader.load(
