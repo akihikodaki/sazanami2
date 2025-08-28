@@ -29,7 +29,7 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
             renderCtx.width = width;
             renderCtx.height = height;
 
-            renderer.draw(canvasCtx, renderCtx);
+            renderer.draw(canvas, renderCtx);
         };
 
         // Wheel handler
@@ -46,13 +46,11 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
             } else {
                 renderCtx.offsetY += e.deltaY; // 縦スクロール
             }
-            const canvasCtx = canvas.getContext("2d")!;
-            renderer.draw(canvasCtx, renderCtx);
+            renderer.draw(canvas, renderCtx);
         };
 
         // キーボード操作
         const handleKeyDown = (e: KeyboardEvent) => {
-            const canvasCtx = canvas.getContext("2d")!;
             let used = false;
 
             const zoomX = renderCtx.width / 2;
@@ -104,7 +102,7 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
 
             if (used) {
                 e.preventDefault(); // ページスクロールなどを抑止
-                renderer.draw(canvasCtx, renderCtx);
+                renderer.draw(canvas, renderCtx);
             }
         };
 
@@ -128,8 +126,7 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
                 renderCtx.offsetY -= dy;
                 lastX = e.clientX;
                 lastY = e.clientY;
-                const canvasCtx = canvas.getContext("2d")!;
-                renderer.draw(canvasCtx, renderCtx);
+                renderer.draw(canvas, renderCtx);
                 return;
             }
 
@@ -182,16 +179,14 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
                 }
             }
 
-            const canvasCtx = canvas.getContext("2d")!;
-            renderer.draw(canvasCtx, renderCtx);
+            renderer.draw(canvas, renderCtx);
         };
         store.on(CHANGE.FILE_LOADED, onContentUpdated);
         store.on(CHANGE.FILE_LOADING_START, onFileLoadStarted);
         store.on(CHANGE.CONTENT_UPDATED, onContentUpdated);
         store.on(CHANGE.CANVAS_FIT, () => {
             renderer.fitScaleToData(renderCtx, 1.0);
-            const canvasCtx = canvas.getContext("2d")!;
-            renderer.draw(canvasCtx, renderCtx);
+            renderer.draw(canvas, renderCtx);
         });
 
         // Cleanup

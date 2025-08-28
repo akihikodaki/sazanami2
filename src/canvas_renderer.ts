@@ -26,7 +26,198 @@ class RendererContext {
     drawnIndex: Int32Array | null = null; 
 }
 
+class RawImageContext {
+    // DOM/CSS 次元（読み取り専用）
+    readonly imageHeightDOM_: number = 0;
+    readonly imageWidthDOM_: number = 0;
+    readonly imageHeightCSS_: number = 0;
+    readonly imageWidthCSS_: number = 0;
 
+    private ctx_: CanvasRenderingContext2D;
+    private imageDataHandle_: ImageData | null = null;
+    private imageDataUint32Ptr_: Uint32Array | null = null;
+    private imageWidthScale_: number = 0;
+    private imageHeightScale_: number = 0;
+
+    private fillStylePrev: string = "";
+    private fillHuePrev: number = -1;
+    private fillRGB_Prev: number = -1;
+
+    private lineWidthPrev: number = -1;
+    private strokeStylePrev: string = "";
+    private fontPrev: string = "";
+
+    constructor(canvas: HTMLCanvasElement) {
+        // 画像サイズ（DOM/CSS）
+        this.imageHeightDOM_ = canvas.height;
+        this.imageWidthDOM_ = canvas.width;
+        this.imageHeightCSS_ = canvas.clientHeight;
+        this.imageWidthCSS_ = canvas.clientWidth;
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+            throw new Error("2D rendering context could not be obtained.");
+        }
+        this.ctx_ = ctx;
+
+        this.imageWidthScale_ = canvas.width / Math.max(1, canvas.clientWidth);
+        this.imageHeightScale_ = canvas.height / Math.max(1, canvas.clientHeight);
+    }
+
+    get clientWidth(): number {
+        return this.ctx_.canvas.clientWidth;
+    }
+
+    get clientHeight(): number {
+        return this.ctx_.canvas.clientHeight;
+    }
+
+    beginRawMode(): void {
+        // キャンバス全体の ImageData を取得
+        this.imageDataHandle_ = this.ctx_.getImageData(0, 0, this.imageWidthDOM_, this.imageHeightDOM_);
+        this.imageDataUint32Ptr_ = new Uint32Array(this.imageDataHandle_.data.buffer);
+    }
+
+    endRawMode(): void {
+        if (this.imageDataHandle_) {
+            this.ctx_.putImageData(this.imageDataHandle_, 0, 0);
+        }
+        this.imageDataHandle_ = null;
+        this.imageDataUint32Ptr_ = null;
+    }
+
+    private fillRectRaw_(
+        cssLeft: number,
+        cssTop: number,
+        cssWidth: number,
+        cssHeight: number,
+        rgb: number
+    ): void {
+        if (!this.imageDataUint32Ptr_) return; // raw mode でなければ何もしない
+
+        // left や top などの座標系は CSS 座標で与えられるが，
+        // imageData は DOM 座標系で与えられるのでスケールする
+        const sx = this.imageWidthScale_;
+        const sy = this.imageHeightScale_;
+        const wCSS = this.imageWidthCSS_;
+        const hCSS = this.imageHeightCSS_;
+        const wDOM = this.imageWidthDOM_;
+        const hDOM = Math.floor(hCSS * sy);
+
+        // CSS→DOM 変換
+        let left   = cssLeft * sx;
+        let top    = cssTop * sy;
+        let right  = Math.min(cssLeft + cssWidth,  wCSS) * sx;
+        let bottom = Math.min(cssTop  + cssHeight, hCSS) * sy;
+
+        // 左・上もクランプ
+        left   = Math.max(0, left);
+        top    = Math.max(0, top);
+        right  = Math.max(left,  Math.min(right,  wDOM));
+        bottom = Math.max(top,   Math.min(bottom, hDOM));
+
+        // width や height は小数になっている可能性があるので，
+        // ループ回数の判定は小数のまま行う
+        // 小数の空間で +1 づつサンプリングしていることになる
+        // +0.5 は四捨五入のため
+        const x0 = Math.floor(left + 0.5);
+        const y0 = Math.floor(top  + 0.5);
+        const x1 = Math.floor(right  - 0.5);
+        const y1 = Math.floor(bottom - 0.5);
+
+        const imageData = this.imageDataUint32Ptr_;
+
+        let rowStart = y0 * wDOM;
+        for (let y = y0; y <= y1; y++) {
+            let p = rowStart + x0;
+            const pEnd = rowStart + x1;
+            for (; p <= pEnd; p++) {
+                imageData[p] = rgb;
+            }
+            rowStart += wDOM;                  // 次の行へ（加算のみ）
+        }
+    }
+
+    toStyle_(stateVal: number): string {
+        const hue = stateVal * 360;
+        const color = `hsl(${hue},60%,60%)`;
+        return color;
+    };
+
+    hsl2rgb(h: number){
+        let s = 0.6, l = 0.6;
+        let r, g, b;
+    
+        if(s == 0){
+            r = g = b = l;
+        }else{
+            let hue2rgb = (p:number, q:number, t:number) => {
+                if(t < 0) t += 1;
+                if(t > 1) t -= 1;
+                if(t < 1/6) return p + (q - p) * 6 * t;
+                if(t < 1/2) return q;
+                if(t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+                return p;
+            };
+    
+            let q = (l < 0.5) ? 
+                (l * (1 + s)) : (l+s - l*s);
+            let p = 2*l - q;
+            r = hue2rgb(p, q, h + 1/3);
+            g = hue2rgb(p, q, h);
+            b = hue2rgb(p, q, h - 1/3);
+        }
+
+        return 0xff000000 | (Math.floor(b*255)<<16) | (Math.floor(g*255)<<8) | Math.floor(r*255);
+    }
+
+    fillRect(cssLeft: number, cssTop: number, cssWidth: number, cssHeight: number, hue: number): void {
+        if (this.imageDataUint32Ptr_)  {
+            // raw mode 中: style(string) → rgb(number) に変換して描画
+            if (this.fillHuePrev !== hue) {
+                const rgb = this.hsl2rgb(hue);
+                if (this.fillRGB_Prev !== rgb) {
+                    this.fillRGB_Prev = rgb;
+                }
+            }
+            this.fillRectRaw_(cssLeft, cssTop, cssWidth, cssHeight, this.fillRGB_Prev);
+        }
+        else {
+            if (this.fillHuePrev !== hue) {
+                this.fillHuePrev = hue;
+                this.fillStylePrev = "";
+                let style = this.toStyle_(hue);
+                this.ctx_.fillStyle = style;
+            }
+            this.ctx_.fillRect(cssLeft, cssTop, cssWidth, cssHeight);
+        }
+    }
+
+    strokeRect(cssLeft: number, cssTop: number, cssWidth: number, cssHeight: number, strokeStyle: string, lineWidth: number): void {
+        if (this.lineWidthPrev !== lineWidth) {
+            this.lineWidthPrev = lineWidth;
+            this.ctx_.lineWidth = lineWidth;
+        }
+        if (this.strokeStylePrev !== strokeStyle) {
+            this.strokeStylePrev = strokeStyle;
+            this.ctx_.strokeStyle = strokeStyle;
+        }
+        this.ctx_.strokeRect(cssLeft, cssTop, cssWidth, cssHeight);
+    }
+
+    fillText(text: string, x: number, y: number, font: string, fillStyle: string): void {
+        if (this.fillStylePrev !== fillStyle) {
+            this.fillStylePrev = fillStyle;
+            this.fillHuePrev = -1;
+            this.ctx_.fillStyle = fillStyle;
+        }
+        if (this.fontPrev !== font) {
+            this.fontPrev = font;
+            this.ctx_.font = font;
+        }
+        this.ctx_.fillText(text, x, y);
+    }
+}
 
 class CanvasRenderer {
     MARGIN_LEFT_ = 50;
@@ -86,13 +277,6 @@ class CanvasRenderer {
         return niceFraction * base;
     };
 
-    getColorForState_(stateVal: number): string {
-        const idx = stateVal;
-        const hue = (idx * 137.508) % 360;
-        const color = `hsl(${hue},60%,60%)`;
-        return color;
-    };
-
     // 背景クリア
     clear(canvasCtx: CanvasRenderingContext2D, renderCtx: RendererContext) {
         if (!canvasCtx) return;
@@ -102,8 +286,11 @@ class CanvasRenderer {
     }
 
 
-    draw(canvasCtx: CanvasRenderingContext2D, renderCtx: RendererContext) {
+    draw(canvas: HTMLCanvasElement, renderCtx: RendererContext) {
+        let canvasCtx = canvas.getContext("2d")!;
         if (!canvasCtx) return;
+
+        // let startTime = (new Date()).getTime();
 
         const { width, height, dataView, offsetX, offsetY } = renderCtx;
         const scaleX = renderCtx.scaleX;
@@ -141,12 +328,17 @@ class CanvasRenderer {
         renderCtx.drawnIndex = new Int32Array(gridCols * gridRows).fill(-1);
 
         // 描画まびき
-        const step = Math.max(1, Math.floor(ratioY / 32));
-        if (ratioY >= 256) {
-            canvasCtx.fillStyle = "hsl(0,0%,70%)";
-        }
+        // X 方向の密度に応じても間引き量をかえる
+        const avgNumPointX = (dataView.getEndIdx(Infinity) - dataView.getStartIdx(-Infinity)) / (dataView.getMaxY() - dataView.getMinY());
+        const step = Math.max(1, Math.floor(ratioY * avgNumPointX / 4 / 32));
+        // const step = Math.max(1, Math.floor(ratioY / 32));
 
         // データ描画＆インデックス記録
+        let rawImageContext = new RawImageContext(canvas);
+        if (ratioY > 1) {
+            rawImageContext.beginRawMode();
+        }
+
         for (let i = startIdx; i < endIdx; i += step) {
             const yVal = dataView.getY(i);
             if (yVal == 0) {
@@ -155,10 +347,8 @@ class CanvasRenderer {
             const xVal = dataView.getX(i);
             const x = this.MARGIN_LEFT_ + xVal * scaleX - offsetX;
             const y = yVal * scaleY - offsetY;
-            if (ratioY < 256) {
-                canvasCtx.fillStyle = this.getColorForState_(dataView.getState(i));
-            }
-            canvasCtx.fillRect(x, y, pxW, pxH);
+            const color = (dataView.getState(i) * 135) % 360 /360;
+            rawImageContext.fillRect(x, y, pxW, pxH, color);
 
             // visible 範囲内なら、grid 上のセルに記録
             const col = xVal - xStart;
@@ -171,6 +361,9 @@ class CanvasRenderer {
                 const cellIndex = gridRow * gridCols + gridCol;
                 renderCtx.drawnIndex[cellIndex] = i;
             }
+        }
+        if (ratioY > 1) {
+            rawImageContext.endRawMode();
         }
 
         // Axes
@@ -223,6 +416,9 @@ class CanvasRenderer {
             if (x > plotWidth) break;
             canvasCtx.fillText(val.toString(), x, plotHeight + 3);
         }
+
+        // let elapsedTime = (new Date()).getTime() - startTime;
+        // console.log(`draw() done: ${elapsedTime} ms`);
     };
 
     // マウス位置（CSSピクセル）に対応するデータの文字列を取得
