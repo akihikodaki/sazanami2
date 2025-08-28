@@ -1,5 +1,5 @@
 import { Loader, DataViewIF } from "./loader";
-// import { /*RectRendererSoft, */RectRendererWebGL } from "./rect_renderer";
+import { /*RectRendererSoft,*/ RectRendererWebGL } from "./rect_renderer";
 
 /**
  * Context holding canvas rendering state and loaded data
@@ -248,12 +248,17 @@ class CanvasRenderer {
     BASE_HEIGHT_ = 1000;
     ZOOM_STEP_LOG_ = Math.log(1.2); // 対数ズーム量
 
-    rectRenderer: RectRendererSoft;//|RectRendererWebGL;
+    rectRenderer: RectRendererSoft|RectRendererWebGL;
 
     constructor() {
-        this.rectRenderer = new RectRendererSoft();
-        // this.rectRenderer = new RectRendererWebGL();
-        this.rectRenderer.init();
+        let rendererGL = new RectRendererWebGL();
+        if (rendererGL.init()) {
+            this.rectRenderer = rendererGL;
+        }
+        else { // GL が初期化できなかった場合はソフト描画にフォールバック
+            this.rectRenderer = new RectRendererSoft();
+            this.rectRenderer.init();
+        }
     }
 
     // uniform zoom
