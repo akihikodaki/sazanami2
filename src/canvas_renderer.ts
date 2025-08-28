@@ -33,7 +33,7 @@ class CanvasRenderer {
     MARGIN_LEFT_ = 50;
     MARGIN_BOTTOM_ = 20;
     BASE_HEIGHT_ = 1000;
-    ZOOM_STEP_LOG_ = Math.log(1.2); // 対数ズーム量
+    ZOOM_STEP_LOG_ = Math.log(1.3); // 対数ズーム量
 
     rectRenderer: RectRendererSoft|RectRendererWebGL;
 
@@ -50,10 +50,17 @@ class CanvasRenderer {
 
     // uniform zoom
     // renderCtx を更新（対数スケールを加減算で更新）
-    zoomUniform(renderCtx: RendererContext, mouseX: number, mouseY: number, zoomIn: boolean) {
+    zoomUniform(
+        renderCtx: RendererContext,
+        mouseX: number,
+        mouseY: number,
+        zoomIn: boolean,
+        divisions: number = 1   // ← 追加：何分割で刻むか
+    ) {
         const prevX = renderCtx.scaleX;
         const prevY = renderCtx.scaleY;
-        const step = this.ZOOM_STEP_LOG_;
+        const base = this.ZOOM_STEP_LOG_;
+        const step = base / Math.max(1, Math.floor(divisions)); // ← 追加：分割
 
         // 対数空間での加減算によりズーム更新
         if (zoomIn) {
@@ -73,9 +80,16 @@ class CanvasRenderer {
     }
 
     // horizontal-only zoom（対数スケール）
-    zoomHorizontal(renderCtx: RendererContext, mouseX: number, mouseY: number, zoomIn: boolean) {
+    zoomHorizontal(
+        renderCtx: RendererContext,
+        mouseX: number,
+        mouseY: number,
+        zoomIn: boolean,
+        divisions: number = 1   // ← 追加
+    ) {
         const prevX = renderCtx.scaleX;
-        const step = this.ZOOM_STEP_LOG_;
+        const base = this.ZOOM_STEP_LOG_;
+        const step = base / Math.max(1, Math.floor(divisions)); // ← 追加
 
         renderCtx.scaleXLog += zoomIn ? step : -step;
 

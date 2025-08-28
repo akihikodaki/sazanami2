@@ -8,11 +8,75 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
     const divRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
+    // ズーム用アニメーションの RA フレームID
+    const zoomRafIdRef = useRef<number | null>(null);
+
+    // 一回の操作あたりのアニメーション時間（一定時間で終わる）
+    const ZOOM_DURATION_MS = 50;      // 120〜220ms 程度に調整可
+    const ZOOM_DIVISIONS_WHEEL = 10;   // ホイール時の分割数（見え方の滑らかさ用）
+    const ZOOM_DIVISIONS_KEY = 20;     // キー操作時の分割数
+
     useEffect(() => {
         const renderer = rendererRef.current;
         const renderCtx = contextRef.current;
         const canvas = canvasRef.current!;
         const div = divRef.current!;
+
+        const cancelZoomAnimation = () => {
+            if (zoomRafIdRef.current != null) {
+                cancelAnimationFrame(zoomRafIdRef.current);
+                zoomRafIdRef.current = null;
+            }
+        };
+
+        /**
+         * 時間基準のズームアニメーション。
+         * totalDivisions: ズーム1回分を何分割するか（合計は必ず1ステップ分）
+         * stepper(divisions): 1刻みだけズームを進める関数（内部で base/divisions を進める）
+         */
+        const animateZoomByTime = (
+            durationMs: number,
+            totalDivisions: number,
+            stepper: (divisions: number) => void
+        ) => {
+            cancelZoomAnimation();
+
+            const divisions = Math.max(1, Math.floor(totalDivisions));
+            const start = performance.now();
+            let applied = 0; // 既に適用した刻み数
+
+            // easing（加速→減速）
+            const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+
+            const tick = (now: number) => {
+                const t = Math.min(1, (now - start) / durationMs);
+                const eased = easeOutCubic(t);
+
+                // 目標刻み数（0..divisions）を時間から算出
+                const target = Math.floor(eased * divisions);
+                // 未適用分だけ進める（フレームレートに依らず最終合計は divisions になる）
+                for (let i = applied; i < target; i++) {
+                    stepper(divisions);
+                }
+                if (target > applied) {
+                    renderer.draw(canvas, renderCtx);
+                    applied = target;
+                }
+
+                if (t < 1) {
+                    zoomRafIdRef.current = requestAnimationFrame(tick);
+                } else {
+                    // 念のため取りこぼしがあれば最終反映
+                    for (let i = applied; i < divisions; i++) {
+                        stepper(divisions);
+                    }
+                    renderer.draw(canvas, renderCtx);
+                    zoomRafIdRef.current = null;
+                }
+            };
+
+            zoomRafIdRef.current = requestAnimationFrame(tick);
+        };
 
         // Resize handler
         const handleResize = () => {
@@ -39,14 +103,24 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
             const mouseX = e.clientX - rect.left;
             const mouseY = e.clientY - rect.top;
 
+            // 一回の操作で進むズーム量は常に「1ステップ」固定
+            // 所要時間は常に ZOOM_DURATION_MS で一定
+            const zoomIn = e.deltaY < 0;
+
             if (e.shiftKey) {
-                renderer.zoomUniform(renderCtx, mouseX, mouseY, e.deltaY < 0);
+                // 一様ズーム
+                animateZoomByTime(ZOOM_DURATION_MS, ZOOM_DIVISIONS_WHEEL, (divs) => {
+                    renderer.zoomUniform(renderCtx, mouseX, mouseY, zoomIn, divs);
+                });
             } else if (e.ctrlKey) {
-                renderer.zoomHorizontal(renderCtx, mouseX, mouseY, e.deltaY < 0);
+                // 水平ズーム
+                animateZoomByTime(ZOOM_DURATION_MS, ZOOM_DIVISIONS_WHEEL, (divs) => {
+                    renderer.zoomHorizontal(renderCtx, mouseX, mouseY, zoomIn, divs);
+                });
             } else {
                 renderCtx.offsetY += e.deltaY; // 縦スクロール
+                renderer.draw(canvas, renderCtx);
             }
-            renderer.draw(canvas, renderCtx);
         };
 
         // キーボード操作
@@ -60,12 +134,16 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
                 if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
                     // Ctrl + ArrowLeft/Right → zoomHorizontal
                     const zoomIn = e.key === "ArrowRight"; // →でズームイン
-                    renderer.zoomHorizontal(renderCtx, zoomX, zoomY, zoomIn);
+                    animateZoomByTime(ZOOM_DURATION_MS, ZOOM_DIVISIONS_KEY, (divs) => {
+                        renderer.zoomHorizontal(renderCtx, zoomX, zoomY, zoomIn, divs);
+                    });
                     used = true;
                 } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
                     // Ctrl + ArrowUp/Down → zoomUniform
                     const zoomIn = e.key === "ArrowUp"; // ↑でズームイン
-                    renderer.zoomUniform(renderCtx, zoomX, zoomY, zoomIn);
+                    animateZoomByTime(ZOOM_DURATION_MS, ZOOM_DIVISIONS_KEY, (divs) => {
+                        renderer.zoomUniform(renderCtx, zoomX, zoomY, zoomIn, divs);
+                    });
                     used = true;
                 }
             } else {
@@ -98,11 +176,13 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
                         used = true;
                         break;
                 }
+                if (used) {
+                    renderer.draw(canvas, renderCtx);
+                }
             }
 
             if (used) {
                 e.preventDefault(); // ページスクロールなどを抑止
-                renderer.draw(canvas, renderCtx);
             }
         };
 
@@ -111,6 +191,9 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
         let lastX = 0;
         let lastY = 0;
         const handleMouseDown = (e: MouseEvent) => {
+            // パン開始時にズームアニメーションが走っていれば止める（競合防止）
+            cancelZoomAnimation();
+
             isDragging = true;
             lastX = e.clientX;
             lastY = e.clientY;
@@ -191,6 +274,7 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
 
         // Cleanup
         return () => {
+            cancelZoomAnimation();
             window.removeEventListener("resize", handleResize);
             div.removeEventListener("wheel", handleWheel);
             window.removeEventListener("keydown", handleKeyDown);
