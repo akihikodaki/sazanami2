@@ -313,17 +313,34 @@ class CanvasRenderer {
         const dataPixelHeight = Math.max(1, (maxY - minY + 1) * baseScaleY) * paddingRatio;
 
         // 必要スケール
-        const fitScaleX = plotWidth  / dataPixelWidth;
-        const fitScaleY = plotHeight / dataPixelHeight;
+        let fitScaleX = plotWidth  / dataPixelWidth;
+        let fitScaleY = plotHeight / dataPixelHeight;
+
+        // 横が長すぎるは横スケールを落とす
+        const MAX_SCALE_X = 20;
+        let clamped = false;
+        if (fitScaleX > MAX_SCALE_X) {
+            fitScaleX = MAX_SCALE_X;
+            clamped = true;
+        }
 
         const SAFE_MIN = 1e-6;
         renderCtx.scaleXLog = Math.log(Math.max(fitScaleX, SAFE_MIN));
         renderCtx.scaleYLog = Math.log(Math.max(fitScaleY, SAFE_MIN));
 
         // 左下に minY が来るようにオフセット調整
-        renderCtx.offsetX = 0;
         renderCtx.offsetY = minY * baseScaleY * Math.exp(renderCtx.scaleYLog);
-        
+
+        // 横方向オフセット
+        if (clamped) {
+            // 実際のデータ幅（px換算後）
+            const usedWidth = dataPixelWidth * fitScaleX;
+            // プロット領域中央に配置
+            renderCtx.offsetX = -(plotWidth - usedWidth) / 2;
+        } else {
+            // フィットの場合は左寄せ
+            renderCtx.offsetX = 0;
+        }        
     }
 }
 
