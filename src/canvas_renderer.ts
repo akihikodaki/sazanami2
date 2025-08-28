@@ -26,6 +26,7 @@ class RendererContext {
     drawnIndex: Int32Array | null = null; 
 }
 
+// 細かい FillRect を行う際に，ImageData を直接操作してソフト描画を行い高速化するためのクラス
 class RawImageContext {
     // DOM/CSS 次元（読み取り専用）
     readonly imageHeightDOM_: number = 0;
@@ -41,11 +42,16 @@ class RawImageContext {
 
     private fillStylePrev: string = "";
     private fillHuePrev: number = -1;
-    private fillRGB_Prev: number = -1;
 
     private lineWidthPrev: number = -1;
     private strokeStylePrev: string = "";
     private fontPrev: string = "";
+
+    private rgbCache_ = new Int32Array(256);    // 0-255 に整数化した hue 値から RGBA 値をキャッシュ
+
+    // オーバーレイ（raw描画）用のオフスクリーンキャンバス
+    private overlayCanvas_: HTMLCanvasElement;
+    private overlayCtx_: CanvasRenderingContext2D;
 
     constructor(canvas: HTMLCanvasElement) {
         // 画像サイズ（DOM/CSS）
@@ -62,6 +68,19 @@ class RawImageContext {
 
         this.imageWidthScale_ = canvas.width / Math.max(1, canvas.clientWidth);
         this.imageHeightScale_ = canvas.height / Math.max(1, canvas.clientHeight);
+
+        // オーバーレイの用意（同サイズ）
+        this.overlayCanvas_ = document.createElement("canvas");
+        this.overlayCanvas_.width = this.imageWidthDOM_;
+        this.overlayCanvas_.height = this.imageHeightDOM_;
+        const overlayCtx_ = this.overlayCanvas_.getContext("2d");
+        if (!overlayCtx_) {
+            throw new Error("Overlay 2D context could not be obtained.");
+        }
+        this.overlayCtx_ = overlayCtx_;
+        
+        // rgbCache を -1 で初期化
+        this.rgbCache_.fill(-1);
     }
 
     get clientWidth(): number {
@@ -73,18 +92,36 @@ class RawImageContext {
     }
 
     beginRawMode(): void {
-        // キャンバス全体の ImageData を取得
-        this.imageDataHandle_ = this.ctx_.getImageData(0, 0, this.imageWidthDOM_, this.imageHeightDOM_);
+        // キャンバス全体の ImageData を取得．全てゼロでクリアされる
+        this.imageDataHandle_ = this.overlayCtx_.createImageData(this.imageWidthDOM_, this.imageHeightDOM_);
         this.imageDataUint32Ptr_ = new Uint32Array(this.imageDataHandle_.data.buffer);
     }
 
     endRawMode(): void {
         if (this.imageDataHandle_) {
-            this.ctx_.putImageData(this.imageDataHandle_, 0, 0);
+            // overlay にピクセルを反映
+            this.overlayCtx_.putImageData(this.imageDataHandle_, 0, 0);
+
+            
+            this.ctx_.save();
+            // drawImage は現在の transform の影響を受けるため、
+            // CSS↔DOM のスケーリングや translate を無視してピクセル等倍で描く
+            this.ctx_.resetTransform(); // モダン環境
+
+            // 合成モードを変更（デフォルトは 'source-over'）
+            this.ctx_.globalCompositeOperation = 'source-over';
+
+            // 画像スムージングを無効化（ピクセルずれ時のにじみ防止）
+            this.ctx_.imageSmoothingEnabled = false;
+
+            // DOM ピクセル座標でそのまま重ねる
+            this.ctx_.drawImage(this.overlayCanvas_, 0, 0);
+            this.ctx_.restore();
         }
         this.imageDataHandle_ = null;
         this.imageDataUint32Ptr_ = null;
     }
+
 
     private fillRectRaw_(
         cssLeft: number,
@@ -132,9 +169,9 @@ class RawImageContext {
             let p = rowStart + x0;
             const pEnd = rowStart + x1;
             for (; p <= pEnd; p++) {
-                imageData[p] = rgb;
+                imageData[p] = rgb; // α を含む RGBA 値（下記メモ参照）
             }
-            rowStart += wDOM;                  // 次の行へ（加算のみ）
+            rowStart += wDOM;
         }
     }
 
@@ -173,14 +210,13 @@ class RawImageContext {
 
     fillRect(cssLeft: number, cssTop: number, cssWidth: number, cssHeight: number, hue: number): void {
         if (this.imageDataUint32Ptr_)  {
-            // raw mode 中: style(string) → rgb(number) に変換して描画
-            if (this.fillHuePrev !== hue) {
-                const rgb = this.hsl2rgb(hue);
-                if (this.fillRGB_Prev !== rgb) {
-                    this.fillRGB_Prev = rgb;
-                }
+            let intHue = Math.floor(hue * 255);
+            let rgb = this.rgbCache_[intHue];
+            if (rgb == -1) {
+                rgb = this.hsl2rgb(hue);
+                this.rgbCache_[intHue] = rgb;
             }
-            this.fillRectRaw_(cssLeft, cssTop, cssWidth, cssHeight, this.fillRGB_Prev);
+            this.fillRectRaw_(cssLeft, cssTop, cssWidth, cssHeight, rgb);
         }
         else {
             if (this.fillHuePrev !== hue) {
@@ -347,7 +383,7 @@ class CanvasRenderer {
             const xVal = dataView.getX(i);
             const x = this.MARGIN_LEFT_ + xVal * scaleX - offsetX;
             const y = yVal * scaleY - offsetY;
-            const color = (dataView.getState(i) * 135) % 360 /360;
+            const color = (dataView.getState(i) * (1024*135/360)) % 1024 / 1024;
             rawImageContext.fillRect(x, y, pxW, pxH, color);
 
             // visible 範囲内なら、grid 上のセルに記録
