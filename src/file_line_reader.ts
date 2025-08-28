@@ -1,46 +1,78 @@
-import * as fzstd from 'fzstd';
+// src/io/getFZSTD_Reader.ts
+import ZstdWorker from "./zstd_worker";
 
-const getFZSTD_Reader = (file: File, updateByteReads: (bytes: number) => void) => {
+export const getFZSTD_Reader = (file: File, updateByteReads: (bytes: number) => void) => {
     const compressedReader = file.stream().getReader();
-    const decompressor = new fzstd.Decompress();
+    const worker = new ZstdWorker();
+
     let closed = false;
+    const outQueue: Uint8Array[] = [];
+    let pendingResolve: ((v: Uint8Array | null) => void) | null = null;
+
+    worker.onmessage = (e: MessageEvent) => {
+        const { type, chunk } = e.data || {};
+        if (type === "data") {
+            const data = new Uint8Array(chunk);
+            if (pendingResolve) {
+                const resolve = pendingResolve;
+                pendingResolve = null;
+                resolve(data);
+            } else {
+                outQueue.push(data);
+            }
+        } else if (type === "end") {
+            closed = true;
+            if (pendingResolve) {
+                const resolve = pendingResolve;
+                pendingResolve = null;
+                resolve(null);
+            }
+        }
+    };
 
     const decompressedStream = new ReadableStream<Uint8Array>({
-        start: (controller) => {
-            // 出力は ondata で随時 enqueue（zstd の push は同期で ondata を呼ぶ）
-            decompressor.ondata = (chunk: Uint8Array) => {
-                if (!closed) 
-                    controller.enqueue(chunk);
-            };
-        },
+        start() {},
         pull: async (controller) => {
-            // 下流（readLine）が read() したタイミングで 1 チャンクだけ読み進める
-            const { done, value } = await compressedReader.read();
-            if (done) {
-                // 終端通知（空チャンク + isLast=true）
-                decompressor.push(new Uint8Array(0), true);
-                closed = true;
-                controller.close();
-                await compressedReader.cancel().catch(() => {});
+            if (outQueue.length > 0) {
+                controller.enqueue(outQueue.shift()!);
                 return;
             }
-            if (value && value.byteLength > 0) {
-                // 進捗は圧縮側バイトでカウント
-                updateByteReads(value.byteLength);
-                // this.bytesRead_ += value.byteLength;
-                // ここで push → 同期的に zstd の ondata が呼ばれて enqueue される
-                decompressor.push(value, false);
+
+            const nextChunk = await new Promise<Uint8Array | null>(async (resolve) => {
+                pendingResolve = resolve;
+                const { done, value } = await compressedReader.read();
+
+                if (done) {
+                    const empty = new Uint8Array(0);
+                    worker.postMessage({ type: "push", chunk: empty, isLast: true }, [empty.buffer]);
+                    await compressedReader.cancel().catch(() => {});
+                    return;
+                }
+
+                if (value && value.byteLength > 0) {
+                    updateByteReads(value.byteLength);
+                    worker.postMessage({ type: "push", chunk: value, isLast: false }, [value.buffer]);
+                }
+            });
+
+            if (nextChunk) {
+                controller.enqueue(nextChunk);
+            } else {
+                controller.close();
             }
         },
         cancel: async () => {
             closed = true;
-            try { (decompressor as any).ondata = null; } catch {}
+            try {
+                worker.postMessage({ type: "cancel" });
+            } catch {}
+            worker.terminate();
             await compressedReader.cancel().catch(() => {});
         }
     });
 
     return decompressedStream.getReader();
-}
+};
 
 export class FileLineReader {
     private reader_!: ReadableStreamDefaultReader<Uint8Array>;

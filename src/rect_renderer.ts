@@ -1,3 +1,5 @@
+/// <reference lib="dom" />
+// 上記がないと，なぜか worker と解釈されてしまう
 
 class RectRendererWebGL {
 
@@ -120,9 +122,9 @@ class RectRendererWebGL {
         // メイン 2D へピクセル等倍で合成
         const ctx2d = this.ctx2d_!;
         ctx2d.save();
-        (ctx2d as any).resetTransform?.();
+        ctx2d.resetTransform();
         ctx2d.globalCompositeOperation = "source-over";
-        (ctx2d as any).imageSmoothingEnabled = false;
+        ctx2d.imageSmoothingEnabled = false;
         ctx2d.drawImage(this.overlayCanvas_!, 0, 0);
         ctx2d.restore();
 

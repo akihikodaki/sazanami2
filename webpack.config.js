@@ -28,10 +28,27 @@ module.exports = (env, argv) => {
         // JS 内から import したときに .tsx/.css を JS に変換する
         module: {
             rules: [
+                // 通常の TS ルールからワーカーを除外
                 {
                     test: /\.tsx?$/,
                     use: "ts-loader",
-                    exclude: /node_modules/,
+                    exclude: [/node_modules/, /zstd_worker\.ts$/],
+                },
+                // ワーカー専用ルール：ts-loader → worker-loader（右から左に適用される）
+                {
+                    test: /zstd_worker\.ts$/,
+                    use: [
+                        {
+                            loader: "worker-loader",
+                            options: {
+                                inline: "no-fallback",      // 単一HTMLに内包
+                                filename: "zstd_worker.js", // 実ファイルは出力しない
+                            },
+                        },
+                        {
+                            loader: "ts-loader",
+                        },
+                    ],
                 },
                 {
                     test: /\.css$/, // CSSファイルの読み込み
