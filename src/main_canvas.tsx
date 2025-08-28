@@ -10,11 +10,14 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
 
     // ズーム用アニメーションの RA フレームID
     const zoomRafIdRef = useRef<number | null>(null);
+    // パン（スクロール）用アニメーションの RA フレームID
+    const panRafIdRef = useRef<number | null>(null);
 
     // 一回の操作あたりのアニメーション時間（一定時間で終わる）
-    const ZOOM_DURATION_MS = 50;      // 120〜220ms 程度に調整可
-    const ZOOM_DIVISIONS_WHEEL = 10;   // ホイール時の分割数（見え方の滑らかさ用）
-    const ZOOM_DIVISIONS_KEY = 20;     // キー操作時の分割数
+    const ZOOM_DURATION_MS = 70;        // ズームの所要時間
+    const PAN_DURATION_MS = 70;         // パンの所要時間
+    const ZOOM_DIVISIONS_WHEEL = 10;    // ホイールズームの分割数
+    const ZOOM_DIVISIONS_KEY = 10;      // キー操作ズームの分割数
 
     useEffect(() => {
         const renderer = rendererRef.current;
@@ -22,10 +25,17 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
         const canvas = canvasRef.current!;
         const div = divRef.current!;
 
+        // ===== アニメーションユーティリティ =====
         const cancelZoomAnimation = () => {
             if (zoomRafIdRef.current != null) {
                 cancelAnimationFrame(zoomRafIdRef.current);
                 zoomRafIdRef.current = null;
+            }
+        };
+        const cancelPanAnimation = () => {
+            if (panRafIdRef.current != null) {
+                cancelAnimationFrame(panRafIdRef.current);
+                panRafIdRef.current = null;
             }
         };
 
@@ -49,7 +59,7 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
             const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
 
             const tick = (now: number) => {
-                const t = Math.min(1, (now - start) / durationMs);
+                const t = Math.max(0, Math.min(1, (now - start) / durationMs));
                 const eased = easeOutCubic(t);
 
                 // 目標刻み数（0..divisions）を時間から算出
@@ -77,6 +87,50 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
 
             zoomRafIdRef.current = requestAnimationFrame(tick);
         };
+
+        /**
+         * 時間基準のパン（オフセット移動）アニメーション。
+         * 絶対位置補間：開始位置から目的地までを直接補間することで逆ブレを防ぐ。
+         * totalDx/totalDy: 最終的に移動したい量（従来の1操作ぶん）
+         * 所要時間は durationMs で一定。Easing で見た目を自然に。
+         */
+        const animatePanByTime = (
+            durationMs: number,
+            totalDx: number,
+            totalDy: number
+        ) => {
+            cancelPanAnimation();
+
+            const start = performance.now();
+            const fromX = renderCtx.offsetX;
+            const fromY = renderCtx.offsetY;
+
+            // easing（加速→減速）
+            const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+
+            const tick = (now: number) => {
+                const t = Math.max(0, Math.min(1, (now - start) / durationMs));
+                const eased = easeOutCubic(t);
+
+                // 絶対位置を補間して直接設定（差分適用しない）
+                renderCtx.offsetX = fromX + totalDx * eased;
+                renderCtx.offsetY = fromY + totalDy * eased;
+                renderer.draw(canvas, renderCtx);
+
+                if (t < 1) {
+                    panRafIdRef.current = requestAnimationFrame(tick);
+                } else {
+                    // 最終位置にスナップ（浮動小数の誤差吸収）
+                    renderCtx.offsetX = fromX + totalDx;
+                    renderCtx.offsetY = fromY + totalDy;
+                    renderer.draw(canvas, renderCtx);
+                    panRafIdRef.current = null;
+                }
+            };
+
+            panRafIdRef.current = requestAnimationFrame(tick);
+        };
+        // =======================================
 
         // Resize handler
         const handleResize = () => {
@@ -118,71 +172,72 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
                     renderer.zoomHorizontal(renderCtx, mouseX, mouseY, zoomIn, divs);
                 });
             } else {
-                renderCtx.offsetY += e.deltaY; // 縦スクロール
-                renderer.draw(canvas, renderCtx);
+                // 縦スクロールもアニメーション
+                // ホイールイベント 1 回ぶんの deltaY を一定時間で補間
+                animatePanByTime(PAN_DURATION_MS, 0, e.deltaY);
             }
         };
 
         // キーボード操作
         const handleKeyDown = (e: KeyboardEvent) => {
-            let used = false;
-
             const zoomX = renderCtx.width / 2;
             const zoomY = renderCtx.height / 2;
 
             if (e.ctrlKey) {
+                // ズーム系はここで既定動作を先に抑止（ページスクロール等の割り込み防止）
+                e.preventDefault();
+
                 if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
                     // Ctrl + ArrowLeft/Right → zoomHorizontal
                     const zoomIn = e.key === "ArrowRight"; // →でズームイン
                     animateZoomByTime(ZOOM_DURATION_MS, ZOOM_DIVISIONS_KEY, (divs) => {
                         renderer.zoomHorizontal(renderCtx, zoomX, zoomY, zoomIn, divs);
                     });
-                    used = true;
                 } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
                     // Ctrl + ArrowUp/Down → zoomUniform
                     const zoomIn = e.key === "ArrowUp"; // ↑でズームイン
                     animateZoomByTime(ZOOM_DURATION_MS, ZOOM_DIVISIONS_KEY, (divs) => {
                         renderer.zoomUniform(renderCtx, zoomX, zoomY, zoomIn, divs);
                     });
-                    used = true;
                 }
-            } else {
-                // パン（視点移動）
-                const PAN_STEP = 40;   // 矢印キー
-                const PAGE_STEP = 200; // PageUp/Down
-                switch (e.key) {
-                    case "ArrowLeft":
-                        renderCtx.offsetX -= PAN_STEP;
-                        used = true;
-                        break;
-                    case "ArrowRight":
-                        renderCtx.offsetX += PAN_STEP;
-                        used = true;
-                        break;
-                    case "ArrowUp":
-                        renderCtx.offsetY -= PAN_STEP;
-                        used = true;
-                        break;
-                    case "ArrowDown":
-                        renderCtx.offsetY += PAN_STEP;
-                        used = true;
-                        break;
-                    case "PageUp":
-                        renderCtx.offsetY -= PAGE_STEP;
-                        used = true;
-                        break;
-                    case "PageDown":
-                        renderCtx.offsetY += PAGE_STEP;
-                        used = true;
-                        break;
-                }
-                if (used) {
-                    renderer.draw(canvas, renderCtx);
-                }
+                return;
             }
 
-            if (used) {
-                e.preventDefault(); // ページスクロールなどを抑止
+            // パン（視点移動）
+            const PAN_STEP = 80;   // 矢印キー
+            const PAGE_STEP = 400; // PageUp/Down
+
+            switch (e.key) {
+                case "ArrowLeft":
+                    // 左へパン（Xマイナス方向）
+                    e.preventDefault();                 // 既定動作を先に抑止
+                    animatePanByTime(PAN_DURATION_MS, -PAN_STEP, 0);
+                    break;
+                case "ArrowRight":
+                    // 右へパン（Xプラス方向）
+                    e.preventDefault();
+                    animatePanByTime(PAN_DURATION_MS, PAN_STEP, 0);
+                    break;
+                case "ArrowUp":
+                    // 上へパン（Yマイナス方向）
+                    e.preventDefault();
+                    animatePanByTime(PAN_DURATION_MS, 0, -PAN_STEP);
+                    break;
+                case "ArrowDown":
+                    // 下へパン（Yプラス方向）
+                    e.preventDefault();
+                    animatePanByTime(PAN_DURATION_MS, 0, PAN_STEP);
+                    break;
+                case "PageUp":
+                    // 大きく上へパン
+                    e.preventDefault();
+                    animatePanByTime(PAN_DURATION_MS, 0, -PAGE_STEP);
+                    break;
+                case "PageDown":
+                    // 大きく下へパン
+                    e.preventDefault();
+                    animatePanByTime(PAN_DURATION_MS, 0, PAGE_STEP);
+                    break;
             }
         };
 
@@ -191,8 +246,9 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
         let lastX = 0;
         let lastY = 0;
         const handleMouseDown = (e: MouseEvent) => {
-            // パン開始時にズームアニメーションが走っていれば止める（競合防止）
+            // パン開始時にズーム/パンのアニメーションが走っていれば止める（競合防止）
             cancelZoomAnimation();
+            cancelPanAnimation();
 
             isDragging = true;
             lastX = e.clientX;
@@ -275,6 +331,7 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
         // Cleanup
         return () => {
             cancelZoomAnimation();
+            cancelPanAnimation();
             window.removeEventListener("resize", handleResize);
             div.removeEventListener("wheel", handleWheel);
             window.removeEventListener("keydown", handleKeyDown);
