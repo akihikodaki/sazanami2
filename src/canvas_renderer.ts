@@ -136,8 +136,8 @@ class CanvasRenderer {
         const ratioY = 1 / scaleY; 
 
         // データ描画用ピクセルサイズ
-        const pxW = Math.max(scaleX, ratioY > 32 ? 0.5 : 1);
-        const pxH = Math.max(scaleY, ratioY > 32 ? 0.5 : 1);
+        const pxW = Math.max(scaleX, 0.5);
+        const pxH = Math.max(scaleY, 0.5);
 
         // 描画セルの start/end インデックス
         const xStart = Math.floor((offsetX - this.MARGIN_LEFT_) / scaleX);
@@ -151,8 +151,7 @@ class CanvasRenderer {
         // 描画まびき
         // X 方向の密度に応じても間引き量をかえる
         const avgNumPointX = (dataView.getEndIdx(Infinity) - dataView.getStartIdx(-Infinity)) / (dataView.getMaxY() - dataView.getMinY());
-        const step = Math.max(1, Math.floor(ratioY * avgNumPointX / 4 / 32));
-        // const step = Math.max(1, Math.floor(ratioY / 32));
+        let step = Math.max(1, Math.floor(ratioY * avgNumPointX / 4 / 32));
 
         // データ描画＆インデックス記録
         this.rectRenderer.beginRawMode(canvas, scaleY);
@@ -178,6 +177,10 @@ class CanvasRenderer {
                 const gridRow = Math.floor(row * gridRows / visibleRows);
                 const cellIndex = gridRow * gridCols + gridCol;
                 renderCtx.drawnIndex[cellIndex] = i;
+            }
+            // モアレを軽減するために適当にノイズを乗せる
+            if (step > 1) {
+                i += ((i >> 5) ^ (i >> 17)) & 1;
             }
         }
         this.rectRenderer.endRawMode();
