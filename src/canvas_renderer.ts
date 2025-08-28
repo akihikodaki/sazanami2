@@ -1,4 +1,5 @@
-import { Loader, DataViewIF, ColumnType } from "./loader";
+import { Loader, DataViewIF } from "./loader";
+// import { /*RectRendererSoft, */RectRendererWebGL } from "./rect_renderer";
 
 /**
  * Context holding canvas rendering state and loaded data
@@ -26,39 +27,51 @@ class RendererContext {
     drawnIndex: Int32Array | null = null; 
 }
 
-// 細かい FillRect を行う際に，ImageData を直接操作してソフト描画を行い高速化するためのクラス
-class RawImageContext {
-    // DOM/CSS 次元（読み取り専用）
-    readonly imageHeightDOM_: number = 0;
-    readonly imageWidthDOM_: number = 0;
-    readonly imageHeightCSS_: number = 0;
-    readonly imageWidthCSS_: number = 0;
 
-    private ctx_: CanvasRenderingContext2D;
+// 細かい FillRect を行う際に，ImageData を直接操作してソフト描画を行い高速化するためのクラス
+class RectRendererSoft {
+    // DOM/CSS 次元（読み取り専用）
+    imageHeightDOM_: number = 0;
+    imageWidthDOM_: number = 0;
+    imageHeightCSS_: number = 0;
+    imageWidthCSS_: number = 0;
+
+    private ctx_: CanvasRenderingContext2D | null = null;
     private imageDataHandle_: ImageData | null = null;
     private imageDataUint32Ptr_: Uint32Array | null = null;
     private imageWidthScale_: number = 0;
     private imageHeightScale_: number = 0;
 
-    private fillStylePrev: string = "";
-    private fillHuePrev: number = -1;
-
-    private lineWidthPrev: number = -1;
-    private strokeStylePrev: string = "";
-    private fontPrev: string = "";
-
+    private fillHuePrev_: number = -1;
+    private fillStylePrev_: string = "";
     private rgbCache_ = new Int32Array(256);    // 0-255 に整数化した hue 値から RGBA 値をキャッシュ
 
     // オーバーレイ（raw描画）用のオフスクリーンキャンバス
-    private overlayCanvas_: HTMLCanvasElement;
-    private overlayCtx_: CanvasRenderingContext2D;
+    private overlayCanvas_: HTMLCanvasElement | null = null;
+    private overlayCtx_: CanvasRenderingContext2D | null = null;
 
-    constructor(canvas: HTMLCanvasElement) {
+    constructor() {
+        // rgbCache を -1 で初期化
+        this.rgbCache_.fill(-1);
+        this.ctx_ = null;
+        this.overlayCanvas_ = null;
+        this.overlayCtx_ = null;
+    }
+
+    init() {
+        // オーバーレイの用意（同サイズ）
+        if (!this.overlayCanvas_) {
+            this.overlayCanvas_ = document.createElement("canvas");
+        }
+        return true;
+    }
+
+    beginRawMode(canvas: HTMLCanvasElement, scale: number): void {
         // 画像サイズ（DOM/CSS）
         this.imageHeightDOM_ = canvas.height;
-        this.imageWidthDOM_ = canvas.width;
+        this.imageWidthDOM_  = canvas.width;
         this.imageHeightCSS_ = canvas.clientHeight;
-        this.imageWidthCSS_ = canvas.clientWidth;
+        this.imageWidthCSS_  = canvas.clientWidth;
 
         const ctx = canvas.getContext("2d");
         if (!ctx) {
@@ -66,11 +79,12 @@ class RawImageContext {
         }
         this.ctx_ = ctx;
 
-        this.imageWidthScale_ = canvas.width / Math.max(1, canvas.clientWidth);
+        this.imageWidthScale_  = canvas.width  / Math.max(1, canvas.clientWidth);
         this.imageHeightScale_ = canvas.height / Math.max(1, canvas.clientHeight);
 
-        // オーバーレイの用意（同サイズ）
-        this.overlayCanvas_ = document.createElement("canvas");
+        if (!this.overlayCanvas_) {
+            return;
+        }
         this.overlayCanvas_.width = this.imageWidthDOM_;
         this.overlayCanvas_.height = this.imageHeightDOM_;
         const overlayCtx_ = this.overlayCanvas_.getContext("2d");
@@ -79,25 +93,20 @@ class RawImageContext {
         }
         this.overlayCtx_ = overlayCtx_;
         
-        // rgbCache を -1 で初期化
-        this.rgbCache_.fill(-1);
-    }
+        // 通常の fillRect を使う
+        if (scale > 1) {
+            return;
+        }
 
-    get clientWidth(): number {
-        return this.ctx_.canvas.clientWidth;
-    }
-
-    get clientHeight(): number {
-        return this.ctx_.canvas.clientHeight;
-    }
-
-    beginRawMode(): void {
         // キャンバス全体の ImageData を取得．全てゼロでクリアされる
-        this.imageDataHandle_ = this.overlayCtx_.createImageData(this.imageWidthDOM_, this.imageHeightDOM_);
+        this.imageDataHandle_   = this.overlayCtx_.createImageData(this.imageWidthDOM_, this.imageHeightDOM_);
         this.imageDataUint32Ptr_ = new Uint32Array(this.imageDataHandle_.data.buffer);
     }
 
     endRawMode(): void {
+        if (!this.overlayCtx_ || !this.ctx_ || !this.overlayCanvas_) {
+            return;
+        }
         if (this.imageDataHandle_) {
             // overlay にピクセルを反映
             this.overlayCtx_.putImageData(this.imageDataHandle_, 0, 0);
@@ -209,6 +218,9 @@ class RawImageContext {
     }
 
     fillRect(cssLeft: number, cssTop: number, cssWidth: number, cssHeight: number, hue: number): void {
+        if (!this.ctx_)
+            return;
+
         if (this.imageDataUint32Ptr_)  {
             let intHue = Math.floor(hue * 255);
             let rgb = this.rgbCache_[intHue];
@@ -219,39 +231,14 @@ class RawImageContext {
             this.fillRectRaw_(cssLeft, cssTop, cssWidth, cssHeight, rgb);
         }
         else {
-            if (this.fillHuePrev !== hue) {
-                this.fillHuePrev = hue;
-                this.fillStylePrev = "";
+            if (this.fillHuePrev_ !== hue) {
+                this.fillHuePrev_ = hue;
+                this.fillStylePrev_ = "";
                 let style = this.toStyle_(hue);
                 this.ctx_.fillStyle = style;
             }
             this.ctx_.fillRect(cssLeft, cssTop, cssWidth, cssHeight);
         }
-    }
-
-    strokeRect(cssLeft: number, cssTop: number, cssWidth: number, cssHeight: number, strokeStyle: string, lineWidth: number): void {
-        if (this.lineWidthPrev !== lineWidth) {
-            this.lineWidthPrev = lineWidth;
-            this.ctx_.lineWidth = lineWidth;
-        }
-        if (this.strokeStylePrev !== strokeStyle) {
-            this.strokeStylePrev = strokeStyle;
-            this.ctx_.strokeStyle = strokeStyle;
-        }
-        this.ctx_.strokeRect(cssLeft, cssTop, cssWidth, cssHeight);
-    }
-
-    fillText(text: string, x: number, y: number, font: string, fillStyle: string): void {
-        if (this.fillStylePrev !== fillStyle) {
-            this.fillStylePrev = fillStyle;
-            this.fillHuePrev = -1;
-            this.ctx_.fillStyle = fillStyle;
-        }
-        if (this.fontPrev !== font) {
-            this.fontPrev = font;
-            this.ctx_.font = font;
-        }
-        this.ctx_.fillText(text, x, y);
     }
 }
 
@@ -261,7 +248,13 @@ class CanvasRenderer {
     BASE_HEIGHT_ = 1000;
     ZOOM_STEP_LOG_ = Math.log(1.2); // 対数ズーム量
 
-    constructor() {}
+    rectRenderer: RectRendererSoft;//|RectRendererWebGL;
+
+    constructor() {
+        this.rectRenderer = new RectRendererSoft();
+        // this.rectRenderer = new RectRendererWebGL();
+        this.rectRenderer.init();
+    }
 
     // uniform zoom
     // renderCtx を更新（対数スケールを加減算で更新）
@@ -370,10 +363,7 @@ class CanvasRenderer {
         // const step = Math.max(1, Math.floor(ratioY / 32));
 
         // データ描画＆インデックス記録
-        let rawImageContext = new RawImageContext(canvas);
-        if (ratioY > 1) {
-            rawImageContext.beginRawMode();
-        }
+        this.rectRenderer.beginRawMode(canvas, scaleY);
 
         for (let i = startIdx; i < endIdx; i += step) {
             const yVal = dataView.getY(i);
@@ -384,7 +374,7 @@ class CanvasRenderer {
             const x = this.MARGIN_LEFT_ + xVal * scaleX - offsetX;
             const y = yVal * scaleY - offsetY;
             const color = (dataView.getState(i) * (1024*135/360)) % 1024 / 1024;
-            rawImageContext.fillRect(x, y, pxW, pxH, color);
+            this.rectRenderer.fillRect(x, y, pxW, pxH, color);
 
             // visible 範囲内なら、grid 上のセルに記録
             const col = xVal - xStart;
@@ -398,9 +388,7 @@ class CanvasRenderer {
                 renderCtx.drawnIndex[cellIndex] = i;
             }
         }
-        if (ratioY > 1) {
-            rawImageContext.endRawMode();
-        }
+        this.rectRenderer.endRawMode();
 
         // Axes
         canvasCtx.strokeStyle = '#eee';
