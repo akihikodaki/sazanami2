@@ -14,8 +14,8 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
     const panRafIdRef = useRef<number | null>(null);
 
     // 一回の操作あたりのアニメーション時間（一定時間で終わる）
-    const ZOOM_DURATION_MS = 70;        // ズームの所要時間
-    const PAN_DURATION_MS = 70;         // パンの所要時間
+    const ZOOM_DURATION_MS = 90;        // ズームの所要時間
+    const PAN_DURATION_MS = 90;         // パンの所要時間
     const ZOOM_DIVISIONS_WHEEL = 10;    // ホイールズームの分割数
     const ZOOM_DIVISIONS_KEY = 10;      // キー操作ズームの分割数
 
@@ -204,8 +204,8 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
             }
 
             // パン（視点移動）
-            const PAN_STEP = 80;   // 矢印キー
-            const PAGE_STEP = 400; // PageUp/Down
+            const PAN_STEP = 120;   // 矢印キー
+            const PAGE_STEP = 480; // PageUp/Down
 
             switch (e.key) {
                 case "ArrowLeft":
