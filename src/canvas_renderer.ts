@@ -136,7 +136,7 @@ class CanvasRenderer {
         const ratioY = 1 / scaleY; 
 
         // データ描画用ピクセルサイズ
-        const pxW = Math.max(scaleX, 0.5);
+        const pxW = Math.max(scaleX, 1);
         const pxH = Math.max(scaleY, 0.5);
 
         // 描画セルの start/end インデックス
