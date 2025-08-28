@@ -19,6 +19,25 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
     const ZOOM_DIVISIONS_WHEEL = 10;    // ホイールズームの分割数
     const ZOOM_DIVISIONS_KEY = 10;      // キー操作ズームの分割数
 
+    // タッチジェスチャー状態
+    const touchRef = useRef<{
+        inPinch: boolean;
+        inSwipe: boolean;
+        initialDistance: number;
+        lastCenter: { x: number; y: number } | null;
+        initialScaleXLog: number;
+        initialScaleYLog: number;
+        lastPos: { x: number; y: number } | null;
+    }>({
+        inPinch: false,
+        inSwipe: false,
+        initialDistance: 0,
+        lastCenter: null,
+        initialScaleXLog: 0,
+        initialScaleYLog: 0,
+        lastPos: null
+    });
+
     useEffect(() => {
         const renderer = rendererRef.current;
         const renderCtx = contextRef.current;
@@ -131,6 +150,126 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
             panRafIdRef.current = requestAnimationFrame(tick);
         };
         // =======================================
+
+        // 2つのタッチ間の距離を計算
+        const getTouchDistance = (t1: Touch, t2: Touch): number => {
+            const dx = t1.clientX - t2.clientX;
+            const dy = t1.clientY - t2.clientY;
+            return Math.hypot(dx, dy);
+        };
+
+        // 2つのタッチの中心点を取得（Canvas ローカル座標）
+        const getTouchCenter = (t1: Touch, t2: Touch): { x: number; y: number } => {
+            const rect = canvas.getBoundingClientRect();
+            return {
+                x: (t1.clientX + t2.clientX) / 2 - rect.left,
+                y: (t1.clientY + t2.clientY) / 2 - rect.top
+            };
+        };
+
+        // 単一タッチ位置（Canvas ローカル座標）
+        const getSingleTouchPos = (t: Touch): { x: number; y: number } => {
+            const rect = canvas.getBoundingClientRect();
+            return { x: t.clientX - rect.left, y: t.clientY - rect.top };
+        };
+
+        // ピンチズームおよびタッチ移動対応用のタッチイベントハンドラ
+        const handleTouchStart = (e: TouchEvent) => {
+            // ジェスチャ開始時は既存アニメーションを止める（競合防止）
+            cancelZoomAnimation();
+            cancelPanAnimation();
+
+            if (e.touches.length === 2) { // 2本指でのタッチ開始
+                const d = getTouchDistance(e.touches[0], e.touches[1]);
+                touchRef.current.initialDistance = d;
+                touchRef.current.lastCenter = getTouchCenter(e.touches[0], e.touches[1]);
+                touchRef.current.initialScaleXLog = renderCtx.scaleXLog;
+                touchRef.current.initialScaleYLog = renderCtx.scaleYLog;
+                touchRef.current.inPinch = true;
+                touchRef.current.inSwipe = false;
+            } else if (e.touches.length === 1) { // 1本指でのタッチ開始
+                touchRef.current.lastPos = getSingleTouchPos(e.touches[0]);
+                touchRef.current.inSwipe = true;
+                touchRef.current.inPinch = false;
+            }
+        };
+
+        const handleTouchMove = (e: TouchEvent) => {
+            e.preventDefault(); // デフォルトのタッチスクロールを無効化
+
+            // マージン（左側）を Renderer から取得（なければ 0）
+            const marginLeft = (renderer as any).MARGIN_LEFT_ ?? 0;
+
+            if (e.touches.length === 2 && touchRef.current.inPinch) {
+                // ピンチ：倍率と中心を更新
+                const newDistance = getTouchDistance(e.touches[0], e.touches[1]);
+                const zoomFactor = newDistance / Math.max(1e-6, touchRef.current.initialDistance);
+
+                // ピンチ操作に応じたズーム処理（対数スケール：自然対数を使用）
+                const targetXLog = touchRef.current.initialScaleXLog + Math.log(zoomFactor);
+                const targetYLog = touchRef.current.initialScaleYLog + Math.log(zoomFactor);
+
+                const center = getTouchCenter(e.touches[0], e.touches[1]);
+                const lastCenter = touchRef.current.lastCenter ?? center;
+
+                // 直前スケール（prev）を保存
+                const prevX = renderCtx.scaleX;
+                const prevY = renderCtx.scaleY;
+
+                // 新しいスケールを適用
+                renderCtx.scaleXLog = targetXLog;
+                renderCtx.scaleYLog = targetYLog;
+
+                // 新しいスケール（new）
+                const newX = renderCtx.scaleX;
+                const newY = renderCtx.scaleY;
+
+                // アンカー（中心）を固定するようにオフセットを更新（zoomUniform と同等）
+                const relX = center.x - marginLeft + renderCtx.offsetX;
+                const relY = center.y + renderCtx.offsetY;
+                renderCtx.offsetX = relX * (newX / prevX) - (center.x - marginLeft);
+                renderCtx.offsetY = relY * (newY / prevY) - center.y;
+
+                // 中心の移動に合わせてパン（指に追従）
+                const dx = center.x - lastCenter.x;
+                const dy = center.y - lastCenter.y;
+                renderCtx.offsetX -= dx;
+                renderCtx.offsetY -= dy;
+
+                // 中心を記録
+                touchRef.current.lastCenter = center;
+
+                renderer.draw(canvas, renderCtx);
+            } else if (e.touches.length === 1 && touchRef.current.inSwipe) {
+                // 1本指の移動操作（即時パン）
+                const current = getSingleTouchPos(e.touches[0]);
+                const last = touchRef.current.lastPos ?? current;
+
+                const dx = current.x - last.x;
+                const dy = current.y - last.y;
+
+                renderCtx.offsetX -= dx;
+                renderCtx.offsetY -= dy;
+
+                touchRef.current.lastPos = current;
+                renderer.draw(canvas, renderCtx);
+            }
+        };
+
+        const handleTouchEnd = (e: TouchEvent) => {
+            if (e.touches.length < 2) {  // 2本指での操作が終わったらリセット
+                touchRef.current.inPinch = false;
+                touchRef.current.lastCenter = null;
+            }
+            if (e.touches.length === 1) { // 1本指のタッチが残っている場合はスクロールに移行するために位置を更新
+                touchRef.current.lastPos = getSingleTouchPos(e.touches[0]);
+                touchRef.current.inSwipe = true;
+            }
+            if (e.touches.length < 1) { // 1本指のタッチが終了した場合もリセット
+                touchRef.current.inSwipe = false;
+                touchRef.current.lastPos = null;
+            }
+        };
 
         // Resize handler
         const handleResize = () => {
@@ -294,6 +433,13 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
         canvas.addEventListener("mousedown", handleMouseDown);
         window.addEventListener("mousemove", handleMouseMove);
         window.addEventListener("mouseup", handleMouseUp);
+
+        // タッチリスナー（passive:false で preventDefault を有効化）
+        canvas.addEventListener("touchstart", handleTouchStart as any, { passive: false });
+        canvas.addEventListener("touchmove", handleTouchMove as any, { passive: false });
+        canvas.addEventListener("touchend", handleTouchEnd as any, { passive: false });
+        canvas.addEventListener("touchcancel", handleTouchEnd as any, { passive: false });
+
         handleResize();
 
         // Store change handler
@@ -338,6 +484,11 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
             canvas.removeEventListener("mousedown", handleMouseDown);
             window.removeEventListener("mousemove", handleMouseMove);
             window.removeEventListener("mouseup", handleMouseUp);
+
+            canvas.removeEventListener("touchstart", handleTouchStart as any);
+            canvas.removeEventListener("touchmove", handleTouchMove as any);
+            canvas.removeEventListener("touchend", handleTouchEnd as any);
+            canvas.removeEventListener("touchcancel", handleTouchEnd as any);
         };
     }, [store]);
 
