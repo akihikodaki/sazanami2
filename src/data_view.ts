@@ -4,6 +4,7 @@ import { Loader, ColumnBuffer } from "./loader";
 type ViewSpec = {
     x: string[];
     y: string[];
+    xIsIndex?: boolean;               // x を行インデクスとして扱うか（内部では仮想カラムに変換）
     yIsIndex?: boolean;               // y を行インデクスとして扱うか（内部では仮想カラムに変換）
     stateField?: string | null;       // 色（状態）列名。なければ null
     xRadix?: Record<string, number>;  // x 各列の基数（未指定は col.stat.max + 1）
@@ -44,13 +45,12 @@ function hasAll(headers: string[], names: string[]): boolean {
     return names.every(n => headers.some(h => eqCI(h, n)));
 }
 
-// 行インデクスを返す仮想カラム（yIsIndex を分岐無しで処理するため）
+// 行インデクスを返す仮想カラム（x/y ともに分岐無しで処理するため）
 class IndexColumn implements NumberColumn {
     private nRows: number;
     stat: { min: number; max: number };
     constructor(nRows: number) {
         this.nRows = nRows;
-        // 値の範囲は 0..nRows-1
         this.stat = { min: 0, max: Math.max(0, nRows - 1) };
     }
     getNumber(i: number): number {
@@ -77,10 +77,14 @@ class AxisProjector {
     private minLinear = 0;                // 線形化後の最小値（目安）
     private maxLinear = 0;                // 線形化後の最大値（目安）
 
+    // v0raw / v1raw を受け取って線形化するクロージャ（列数に応じて事前コンパイル）
+    private combine1?: (v0raw: number) => number;
+    private combine2?: (v0raw: number, v1raw: number) => number;
+
     init(loader: Loader, axis: AxisInit, numRows: number) {
         this.numRows = numRows;
 
-        // yIsIndex 等は仮想カラムに変換して以後は分岐しない
+        // asIndex 指定や names なしは仮想カラム（IndexColumn）に置き換える
         if (axis.asIndex || axis.names.length === 0) {
             this.names = ["__index__"];
             this.cols = [new IndexColumn(numRows)];
@@ -97,7 +101,7 @@ class AxisProjector {
             return col.stat.max + 1;
         });
 
-        // 乗数を構築
+        // 乗数を構築（右端が最下位桁）
         this.mult = AxisProjector.buildMultipliers(bases);
 
         // mod を確定（0 は mod 無し）
@@ -109,23 +113,49 @@ class AxisProjector {
 
         this.minLinear = perMin.reduce((s, v, i) => s + v * this.mult[i], 0);
         this.maxLinear = perMax.reduce((s, v, i) => s + v * this.mult[i], 0);
+
+        // ===== ここで value の計算をするクロージャを事前コンパイル =====
+        if (this.cols.length === 1) {
+            const m0 = this.mult[0] ?? 1;
+            const mod0 = this.mods[0] ?? 0;
+            if (mod0) {
+                this.combine1 = (v0raw: number) => (v0raw % mod0) * m0;
+            } else {
+                this.combine1 = (v0raw: number) => v0raw * m0;
+            }
+            this.combine2 = undefined;
+        } else {
+            const m0 = this.mult[0] ?? 1;
+            const m1 = this.mult[1] ?? 1;
+            const mod0 = this.mods[0] ?? 0;
+            const mod1 = this.mods[1] ?? 0;
+            if (mod0 && mod1) {
+                this.combine2 = (v0raw: number, v1raw: number) => (v0raw % mod0) * m0 + (v1raw % mod1) * m1;
+            } else if (mod0 && !mod1) {
+                this.combine2 = (v0raw: number, v1raw: number) => (v0raw % mod0) * m0 + v1raw * m1;
+            } else if (!mod0 && mod1) {
+                this.combine2 = (v0raw: number, v1raw: number) => v0raw * m0 + (v1raw % mod1) * m1;
+            } else {
+                this.combine2 = (v0raw: number, v1raw: number) => v0raw * m0 + v1raw * m1;
+            }
+            this.combine1 = undefined;
+        }
     }
 
-    // 値の線形化（getNumber を必ず経由）
+    // 値の線形化（getNumber で生値を取り出し、事前コンパイルしたクロージャに渡す）
     value(i: number): number {
-        if (this.cols.length === 1) {
+        if (this.combine1) {
             const v0raw = this.cols[0].getNumber(i);
-            const v0 = this.mods[0] ? v0raw % this.mods[0] : v0raw;
-            return v0 * this.mult[0];
+            return this.combine1(v0raw);
         }
+        // 2列想定
         const v0raw = this.cols[0].getNumber(i);
         const v1raw = this.cols[1].getNumber(i);
-        const v0 = this.mods[0] ? v0raw % this.mods[0] : v0raw;
-        const v1 = this.mods[1] ? v1raw % this.mods[1] : v1raw;
-        return v0 * this.mult[0] + v1 * this.mult[1];
+        // combine2 は init で必ず用意されている前提（2列時）
+        return this.combine2!(v0raw, v1raw);
     }
 
-    // 二分探索（|0 などのビット演算は使用しない）
+    // 二分探索（ビット演算は使用しない）
     lowerBound(target: number): number {
         let lo = 0;
         let hi = this.numRows;
@@ -169,19 +199,20 @@ class UnifiedDataView implements DataViewIF {
         this.spec = spec;
         this.numRows_ = loader.numRows;
 
-        // x 軸の初期化
+        // x 軸の初期化（xIsIndex に対応）
+        const xAsIndex = !!spec.xIsIndex || spec.x.length === 0;
         this.xAxis.init(
             loader,
             {
-                names: spec.x,
+                names: xAsIndex ? [] : spec.x,
                 radix: spec.xRadix,
                 mod: spec.xMod,
-                asIndex: false
+                asIndex: xAsIndex
             },
             this.numRows_
         );
 
-        // y 軸の初期化（yIsIndex は仮想カラム化）
+        // y 軸の初期化（yIsIndex に対応）
         const yAsIndex = !!spec.yIsIndex || spec.y.length === 0;
         this.yAxis.init(
             loader,
@@ -230,7 +261,7 @@ class UnifiedDataView implements DataViewIF {
     }
 }
 
-// スキーマ推論（従来ルールを踏襲）
+// スキーマ推論（従来ルールを踏襲しつつ xIsIndex にも対応）
 function inferViewSpec(loader: Loader): ViewSpec {
     const headers = loader.headers;
 
@@ -246,8 +277,9 @@ function inferViewSpec(loader: Loader): ViewSpec {
         return {
             x: [cu, wf],
             y: [cycle],
-            stateField: state ?? null,
+            xIsIndex: false,
             yIsIndex: false,
+            stateField: state ?? null,
             xRadix: { [wf]: wfMax }
         };
     }
@@ -262,6 +294,7 @@ function inferViewSpec(loader: Loader): ViewSpec {
         return {
             x: [bank, tbl],
             y: [],                      // y は行インデクス（仮想カラムに変換される）
+            xIsIndex: false,
             yIsIndex: true,
             stateField: actual ?? null,
             xRadix: { [bank]: bankBase, [tbl]: 8 },
@@ -269,7 +302,7 @@ function inferViewSpec(loader: Loader): ViewSpec {
         };
     }
 
-    // フォールバック：先頭2列を y、次の2列を x とする（あれば）
+    // フォールバック：先頭2列を y、次の2列を x とする（不足分は index 化）
     const y1 = headers[0];
     const x1 = headers[1];
     const y2 = headers[2];
@@ -288,6 +321,7 @@ function inferViewSpec(loader: Loader): ViewSpec {
         x,
         y,
         stateField: st,
+        xIsIndex: x.length === 0,
         yIsIndex: y.length === 0
     };
 }
