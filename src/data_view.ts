@@ -4,11 +4,11 @@ import { Loader, ColumnBuffer } from "./loader";
 type ViewSpec = {
     x: string[];
     y: string[];
-    yIsIndex?: boolean;               // y が行インデックスなら true
+    yIsIndex?: boolean;               // y を行インデクスとして扱うか（内部では仮想カラムに変換）
     stateField?: string | null;       // 色（状態）列名。なければ null
-    xRadix?: Record<string, number>;  // x 各列の基数（未指定は max+1）
+    xRadix?: Record<string, number>;  // x 各列の基数（未指定は col.stat.max + 1）
     xMod?: Record<string, number>;    // x 各列の剰余（v % mod）
-    yRadix?: Record<string, number>;  // y 各列の基数（未指定は max+1）
+    yRadix?: Record<string, number>;  // y 各列の基数（未指定は col.stat.max + 1）
     yMod?: Record<string, number>;    // y 各列の剰余（v % mod）
 };
 
@@ -22,6 +22,12 @@ interface DataViewIF {
     getMaxY(): number;
     getMinY(): number;
     test(headers: string[]): boolean;
+}
+
+// ColumnBuffer と同等に使える最小限の型
+interface NumberColumn {
+    getNumber(i: number): number;
+    stat: { min: number; max: number };
 }
 
 // 大文字小文字を無視した等価判定
@@ -38,50 +44,57 @@ function hasAll(headers: string[], names: string[]): boolean {
     return names.every(n => headers.some(h => eqCI(h, n)));
 }
 
-// 軸の初期化用パラメータ（共通化のための内部型）
+// 行インデクスを返す仮想カラム（yIsIndex を分岐無しで処理するため）
+class IndexColumn implements NumberColumn {
+    private nRows: number;
+    stat: { min: number; max: number };
+    constructor(nRows: number) {
+        this.nRows = nRows;
+        // 値の範囲は 0..nRows-1
+        this.stat = { min: 0, max: Math.max(0, nRows - 1) };
+    }
+    getNumber(i: number): number {
+        return i;
+    }
+}
+
+// 軸の初期化用パラメータ（共通）
 type AxisInit = {
     names: string[];                  // 使用する列名（最大2）
     radix?: Record<string, number>;   // 各列の基数
     mod?: Record<string, number>;     // 各列の剰余
-    asIndex?: boolean;                // 行インデックスとして扱うか
+    asIndex?: boolean;                // 行インデクスとして仮想カラムを使うか
 };
 
 // 軸の線形化・検索を共通化する小クラス
 class AxisProjector {
     private names: string[] = [];
-    private cols: ColumnBuffer[] = [];    // getNumber を使うため ColumnBuffer を保持
+    private cols: NumberColumn[] = [];    // getNumber/stat を持つ列群
     private mult: number[] = [];          // 混合基数の乗数（右端が最下位）
     private mods: number[] = [];          // 各列の mod（0 は mod 無し）
-    private asIndex = false;
     private numRows = 0;
 
     private minLinear = 0;                // 線形化後の最小値（目安）
     private maxLinear = 0;                // 線形化後の最大値（目安）
 
     init(loader: Loader, axis: AxisInit, numRows: number) {
-        this.asIndex = !!axis.asIndex;
         this.numRows = numRows;
 
-        if (this.asIndex || axis.names.length === 0) {
-            this.names = [];
-            this.cols = [];
-            this.mult = [];
-            this.mods = [];
-            this.minLinear = 0;
-            this.maxLinear = numRows;
-            return;
+        // yIsIndex 等は仮想カラムに変換して以後は分岐しない
+        if (axis.asIndex || axis.names.length === 0) {
+            this.names = ["__index__"];
+            this.cols = [new IndexColumn(numRows)];
+        } else {
+            this.names = axis.names.slice(0, 2);
+            this.cols = this.names.map(n => loader.columnFromName(n) as unknown as NumberColumn);
         }
 
-        // 最大2列まで
-        this.names = axis.names.slice(0, 2);
-        this.cols = this.names.map(n => loader.columnFromName(n));
-
-        // 基数を確定（未指定は max+1）
+        // 基数を確定（未指定は col.stat.max + 1）
         const bases = this.cols.map((col, idx) => {
             const name = this.names[idx];
             const explicit = axis.radix?.[name];
             if (explicit != null) return explicit;
-            return (loader.stats[name]?.max ?? col.stat.max) + 1;
+            return col.stat.max + 1;
         });
 
         // 乗数を構築
@@ -91,13 +104,8 @@ class AxisProjector {
         this.mods = this.cols.map((_, idx) => axis.mod?.[this.names[idx]] ?? 0);
 
         // min/max（概算）：mod 指定があれば [0, mod-1]、なければ列の統計値を使用
-        const perMin = this.cols.map((col, idx) => {
-            return this.mods[idx] ? 0 : (loader.stats[this.names[idx]]?.min ?? col.stat.min);
-        });
-        const perMax = this.cols.map((col, idx) => {
-            if (this.mods[idx]) return this.mods[idx] - 1;
-            return (loader.stats[this.names[idx]]?.max ?? col.stat.max);
-        });
+        const perMin = this.cols.map((col, idx) => (this.mods[idx] ? 0 : col.stat.min));
+        const perMax = this.cols.map((col, idx) => (this.mods[idx] ? this.mods[idx] - 1 : col.stat.max));
 
         this.minLinear = perMin.reduce((s, v, i) => s + v * this.mult[i], 0);
         this.maxLinear = perMax.reduce((s, v, i) => s + v * this.mult[i], 0);
@@ -105,14 +113,11 @@ class AxisProjector {
 
     // 値の線形化（getNumber を必ず経由）
     value(i: number): number {
-        if (this.asIndex || this.cols.length === 0) return i;
-
         if (this.cols.length === 1) {
             const v0raw = this.cols[0].getNumber(i);
             const v0 = this.mods[0] ? v0raw % this.mods[0] : v0raw;
             return v0 * this.mult[0];
         }
-
         const v0raw = this.cols[0].getNumber(i);
         const v1raw = this.cols[1].getNumber(i);
         const v0 = this.mods[0] ? v0raw % this.mods[0] : v0raw;
@@ -120,23 +125,18 @@ class AxisProjector {
         return v0 * this.mult[0] + v1 * this.mult[1];
     }
 
-    // 二分探索（y 用に使用）
+    // 二分探索（|0 などのビット演算は使用しない）
     lowerBound(target: number): number {
-        if (this.asIndex || this.cols.length === 0) {
-            const v = target;
-            return Math.max(0, Math.min(this.numRows, v));
-        }
         let lo = 0;
         let hi = this.numRows;
         while (lo < hi) {
-            const mid = (lo + hi) >>> 1;
+            const mid = Math.floor((lo + hi) / 2);
             if (this.value(mid) < target) lo = mid + 1;
             else hi = mid;
         }
         return lo;
     }
 
-    // 乗数の構築（右端が最下位桁）
     private static buildMultipliers(bases: number[]): number[] {
         const n = bases.length;
         if (n === 0) return [];
@@ -147,15 +147,11 @@ class AxisProjector {
         return mult;
     }
 
-    getMin(): number {
-        return this.minLinear;
-    }
-    getMax(): number {
-        return this.maxLinear;
-    }
+    getMin(): number { return this.minLinear; }
+    getMax(): number { return this.maxLinear; }
 }
 
-// 汎用 DataView 実装（x/y を AxisProjector で共通化）
+// 汎用 DataView 実装（x/y を AxisProjector で完全共通化）
 class UnifiedDataView implements DataViewIF {
     private spec!: ViewSpec;
 
@@ -185,7 +181,7 @@ class UnifiedDataView implements DataViewIF {
             this.numRows_
         );
 
-        // y 軸の初期化
+        // y 軸の初期化（yIsIndex は仮想カラム化）
         const yAsIndex = !!spec.yIsIndex || spec.y.length === 0;
         this.yAxis.init(
             loader,
@@ -244,7 +240,8 @@ function inferViewSpec(loader: Loader): ViewSpec {
         const cu = findHeader(headers, "cu")!;
         const wf = findHeader(headers, "wf")!;
         const state = findHeader(headers, "state");
-        const wfMax = (loader.stats[wf]?.max ?? loader.columnFromName(wf).stat.max) + 1;
+
+        const wfMax = loader.columnFromName(wf).stat.max + 1;
 
         return {
             x: [cu, wf],
@@ -260,11 +257,11 @@ function inferViewSpec(loader: Loader): ViewSpec {
         const bank = findHeader(headers, "Bank")!;
         const tbl = findHeader(headers, "TblIdx")!;
         const actual = findHeader(headers, "Actual");
-        const bankBase = (loader.stats[bank]?.max ?? loader.columnFromName(bank).stat.max) + 1;
+        const bankBase = loader.columnFromName(bank).stat.max + 1;
 
         return {
             x: [bank, tbl],
-            y: [],                      // y は行インデックス
+            y: [],                      // y は行インデクス（仮想カラムに変換される）
             yIsIndex: true,
             stateField: actual ?? null,
             xRadix: { [bank]: bankBase, [tbl]: 8 },
