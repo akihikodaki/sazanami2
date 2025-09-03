@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, createContext, useContext } from "react";
 import Store, { ACTION, CHANGE } from "./store";
 import { CanvasRenderer, RendererContext } from "./canvas_renderer";
+import { inferViewSpec } from "./data_view";
 
 const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
     const rendererRef = useRef<CanvasRenderer>(new CanvasRenderer());
@@ -452,7 +453,11 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
         };
         const onContentUpdated = () => {
             let firstTime = !renderCtx.dataView;
-            renderCtx.dataView = store.loader.GetDataView();
+            if (!store.viewSpec) {
+                let viewSpec = inferViewSpec(store.loader);
+                store.trigger(ACTION.SET_VIEW_SPEC, viewSpec);
+            }
+            renderCtx.dataView = store.loader.GetDataView(store.viewSpec);
             renderCtx.numRows = store.loader.numRows;
             // 初回表示で範囲外だったらリセット
             if (firstTime) {

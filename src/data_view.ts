@@ -266,6 +266,10 @@ const inferViewSpec = (loader: Loader): ViewSpec => {
 
     const h = loader.headers;
 
+    if (h.length === 0) {
+        throw Error("Cannot infer view spec: no columns");
+    }
+
     // OpenCL 形：x = cu * (max(wf)+1) + wf, y = cycle
     if (hasAll(h, ["cycle", "cu", "wf"])) {
         const cycle = findHeader(h, "cycle")!;

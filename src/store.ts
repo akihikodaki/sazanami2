@@ -1,5 +1,5 @@
 import { Loader } from "./loader";
-import { FileLineReader } from "./file_line_reader";
+import { inferViewSpec, ViewSpec } from "./data_view";
 
 enum ACTION {
     FILE_LOAD,
@@ -9,6 +9,7 @@ enum ACTION {
     SHOW_SETTINGS, // 設定パネルの表示
     SHOW_MESSAGE_IN_STATUS_BAR,
     CANVAS_FIT,
+    SET_VIEW_SPEC,
     ACTION_END, // 末尾
 };
 
@@ -31,6 +32,7 @@ class Store {
     handlers_: { [key: number]: Array<(...args: any[]) => void> } = {};
 
     loader: Loader;
+    viewSpec: ViewSpec|null = null; // 現在のビュー仕様
 
     // Settings panelを表示するかどうか
     showSettings: boolean = false;
@@ -39,6 +41,7 @@ class Store {
         this.loader = new Loader();
 
         this.on(ACTION.FILE_LOAD, (file: File) => {
+            this.viewSpec = null; // 新しいファイルをロードするときはビュー仕様をリセット
             this.trigger(CHANGE.FILE_LOADING_START);
             this.loader.load(
                 file, 
