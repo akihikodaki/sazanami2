@@ -11,6 +11,13 @@ type ViewSpec = {
     stateField?: string | null;   
 };
 
+// ビュー仕様の中身が一致しているかどうかを判定する
+const isEqualViewSpec = (spec1: ViewSpec, spec2: ViewSpec): boolean =>{
+    return spec1.axisX === spec2.axisX &&
+           spec1.axisY === spec2.axisY &&
+           spec1.stateField === spec2.stateField;
+}
+
 // ColumnBuffer と同等に使える最小限の型
 // 仮想 行インデクスで使用
 interface NumberColumn {
@@ -305,4 +312,4 @@ const inferViewSpec = (loader: Loader): ViewSpec => {
     }
 }
 
-export { DataView, ViewSpec, inferViewSpec };
+export { DataView, ViewSpec, inferViewSpec, isEqualViewSpec };
