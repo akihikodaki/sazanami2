@@ -111,16 +111,10 @@ class AxisProjector {
     // コンパイル済み関数を使って展開
     value(i: number): number {
         const k = this.cols.length;
-        if (k === 0) {
-            return (this.compiled as () => number)();
-        } else if (k === 1) {
-            const v0raw = this.cols[0].getNumber(i);
-            return (this.compiled as (v0raw: number) => number)(v0raw);
-        } else {
-            const v0raw = this.cols[0].getNumber(i);
-            const v1raw = this.cols[1].getNumber(i);
-            return (this.compiled as (v0raw: number, v1raw: number) => number)(v0raw, v1raw);
-        }
+        let v0raw = 0, v1raw = 0;
+        if (k >= 1) { v0raw = this.cols[0].getNumber(i); } 
+        if (k >= 2) { v1raw = this.cols[1].getNumber(i); }
+        return this.compiled(v0raw, v1raw);
     }
 
     // 二分探索
