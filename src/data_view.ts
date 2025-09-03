@@ -1,10 +1,14 @@
 import { Loader, ColumnBuffer } from "./loader";
 
-// ビュー仕様：軸は式（最大2変数）。__index__ を使うと行インデクス。
+// ビュー仕様
 type ViewSpec = {
-    axisX: string;                // 例: "__index__", "cu * 9 + wf", "Bank * 8 + (TblIdx % 8)"
-    axisY: string;                // 例: "cycle", "__index__", "y0 * 1000 + y1"
-    stateField?: string | null;   // 色（状態）列名。なければ null
+    // 軸は式（最大2変数）
+    // __index__ を使うと仮想的に行インデクスになる
+    axisX: string;                
+    axisY: string;                
+
+    // 色（状態）列名。なければ null
+    stateField?: string | null;   
 };
 
 interface DataViewIF {
@@ -16,27 +20,13 @@ interface DataViewIF {
     getMaxX(): number;
     getMaxY(): number;
     getMinY(): number;
-    test(headers: string[]): boolean;
 }
 
 // ColumnBuffer と同等に使える最小限の型
+// 仮想 行インデクスで使用
 interface NumberColumn {
     getNumber(i: number): number;
     stat: { min: number; max: number };
-}
-
-// 大文字小文字を無視した等価判定
-const eqCI = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
-
-// 指定名に一致するヘッダを検索（大文字小文字無視）
-function findHeader(headers: string[], name: string): string | null {
-    const hit = headers.find(h => eqCI(h, name));
-    return hit ?? null;
-}
-
-// すべての列名が存在するか確認
-function hasAll(headers: string[], names: string[]): boolean {
-    return names.every(n => headers.some(h => eqCI(h, n)));
 }
 
 // 行インデクスを返す仮想カラム
@@ -52,28 +42,23 @@ class IndexColumn implements NumberColumn {
     }
 }
 
-// 軸初期化引数（式を与える）
-type AxisInit = {
-    axis: string;     // "__index__" や "cu * 8 + (wf % 8)" など
-};
-
 // 軸の線形化・探索（式→コンパイル）
 class AxisProjector {
     private expr: string = "";
-    private varNames: string[] = [];                 // 式に出現する変数（最大2）
-    private cols: NumberColumn[] = [];               // 変数に対応する列（IndexColumn を含む）
-    private compiled!: (...args: number[]) => number;// new Function で作る合成関数
-    private numRows = 0;
+    private varNames: string[] = [];                  // 式に出現する変数（最大2）
+    private cols: NumberColumn[] = [];                // 変数に対応する列（IndexColumn を含む）
+    private compiled!: (...args: number[]) => number; // new Function で作る合成関数
+    private numRows_ = 0;
 
-    private minLinear = 0;                           // 近似最小（コーナー評価）
-    private maxLinear = 0;                           // 近似最大（コーナー評価）
+    private min_ = 0;                           // 近似最小
+    private max_ = 0;                           // 近似最大
 
-    init(loader: Loader, axisInit: AxisInit, numRows: number) {
-        this.expr = axisInit.axis.trim();
-        this.numRows = numRows;
+    init(loader: Loader, axisExpr: string, numRows: number) {
+        this.expr = axisExpr.trim();
+        this.numRows_ = numRows;
 
         // 変数抽出（識別子を列名と解釈、最大2個まで）
-        this.varNames = AxisProjector.extractVariables(this.expr);
+        this.varNames = this.extractVariables_(this.expr);
         if (this.varNames.length > 2) {
             throw new Error(`Axis expression uses more than 2 variables: ${this.expr}`);
         }
@@ -85,29 +70,28 @@ class AxisProjector {
         });
 
         // 簡易サニタイズ（数字・演算子・括弧・空白・識別子のみ許可）
-        if (!AxisProjector.isSafeExpression(this.expr)) {
+        if (!this.isSafeExpression_(this.expr)) {
             throw new Error(`Unsafe axis expression: ${this.expr}`);
         }
 
         // 変数名を引数名に置換して Function をコンパイル
         const argNames = this.varNames.map((_, i) => `v${i}raw`); // v0raw, v1raw
-        const rewritten = AxisProjector.rewriteExpression(this.expr, this.varNames, argNames);
+        const rewritten = this.rewriteExpression_(this.expr, this.varNames, argNames);
         const body = `return (${rewritten});`;
         this.compiled = new Function(...argNames, body) as (...args: number[]) => number;
 
-        // ===== min/max を「各列の min/max の組み合わせ評価」で推定する =====
-        // 2次以上の式で厳密でない可能性は了承の前提
+        // min/max を「各列の min/max の組み合わせ評価」で推定する
         const k = this.cols.length;
         if (k === 0) {
             const v = (this.compiled as () => number)();
-            this.minLinear = v;
-            this.maxLinear = v;
+            this.min_ = v;
+            this.max_ = v;
         } else if (k === 1) {
             const c0 = this.cols[0];
             const a = (this.compiled as (v0raw: number) => number)(c0.stat.min);
             const b = (this.compiled as (v0raw: number) => number)(c0.stat.max);
-            this.minLinear = Math.min(a, b);
-            this.maxLinear = Math.max(a, b);
+            this.min_ = Math.min(a, b);
+            this.max_ = Math.max(a, b);
         } else {
             const c0 = this.cols[0];
             const c1 = this.cols[1];
@@ -119,12 +103,12 @@ class AxisProjector {
             const v10 = eval2(c0.stat.max, c1.stat.min);
             const v11 = eval2(c0.stat.max, c1.stat.max);
 
-            this.minLinear = Math.min(v00, v01, v10, v11);
-            this.maxLinear = Math.max(v00, v01, v10, v11);
+            this.min_ = Math.min(v00, v01, v10, v11);
+            this.max_ = Math.max(v00, v01, v10, v11);
         }
     }
 
-    // 値の線形化（getNumber → コンパイル済み関数）
+    // コンパイル済み関数を使って展開
     value(i: number): number {
         const k = this.cols.length;
         if (k === 0) {
@@ -139,10 +123,10 @@ class AxisProjector {
         }
     }
 
-    // 二分探索（ビット演算は使用しない）
+    // 二分探索
     lowerBound(target: number): number {
         let lo = 0;
-        let hi = this.numRows;
+        let hi = this.numRows_;
         while (lo < hi) {
             const mid = Math.floor((lo + hi) / 2);
             if (this.value(mid) < target) lo = mid + 1;
@@ -151,11 +135,11 @@ class AxisProjector {
         return lo;
     }
 
-    getMin(): number { return this.minLinear; }
-    getMax(): number { return this.maxLinear; }
+    getMin(): number { return this.min_; }
+    getMax(): number { return this.max_; }
 
     // 識別子抽出（簡易）：英数字と '_' からなる単語を列名候補に
-    private static extractVariables(expr: string): string[] {
+    private extractVariables_(expr: string): string[] {
         const idRegex = /\b[A-Za-z_][A-Za-z0-9_]*\b/g;
         const disallow = new Set([
             // JS 予約語（最低限）
@@ -175,7 +159,7 @@ class AxisProjector {
     }
 
     // 変数名 → 引数名に安全に置換（単語境界）
-    private static rewriteExpression(expr: string, vars: string[], args: string[]): string {
+    private rewriteExpression_(expr: string, vars: string[], args: string[]): string {
         let rewritten = expr;
         for (let i = 0; i < vars.length; i++) {
             const v = vars[i];
@@ -187,7 +171,7 @@ class AxisProjector {
     }
 
     // 許可トークンのみかの簡易チェック
-    private static isSafeExpression(expr: string): boolean {
+    private isSafeExpression_(expr: string): boolean {
         // 許容：数字・小数点・空白・演算子 + - * / % () そして識別子・下線
         // セミコロンや =、?、:、{}、[] などは不許可
         const safe = /^[0-9\s+\-*/%().A-Za-z_]+$/.test(expr);
@@ -204,16 +188,12 @@ class UnifiedDataView implements DataViewIF {
     private stateCol: ColumnBuffer | null = null;
     private numRows_ = 0;
 
-    test(_headers: string[]): boolean {
-        return true;
-    }
-
     init(loader: Loader, spec: ViewSpec) {
         this.spec = spec;
         this.numRows_ = loader.numRows;
 
-        this.xAxis.init(loader, { axis: spec.axisX }, this.numRows_);
-        this.yAxis.init(loader, { axis: spec.axisY }, this.numRows_);
+        this.xAxis.init(loader, spec.axisX, this.numRows_);
+        this.yAxis.init(loader, spec.axisY, this.numRows_);
 
         this.stateCol = spec.stateField ? loader.columnFromName(spec.stateField) : null;
     }
@@ -248,18 +228,33 @@ class UnifiedDataView implements DataViewIF {
 }
 
 // ヘッダから式を推論し、定数を埋め込む（radix/mod は式内にリテラル）
-function inferViewSpec(loader: Loader): ViewSpec {
-    const H = loader.headers;
+const inferViewSpec = (loader: Loader): ViewSpec => {
 
     // ヘルパ：列の基数（= max+1）を取得
     const base = (name: string) => loader.columnFromName(name).stat.max + 1;
 
+    // 大文字小文字を無視した等価判定
+    const eqCI = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+
+    // 指定名に一致するヘッダを検索（大文字小文字無視）
+    const findHeader = (headers: string[], name: string): string | null => {
+        const hit = headers.find(h => eqCI(h, name));
+        return hit ?? null;
+    }
+
+    // すべての列名が存在するか確認
+    const hasAll = (headers: string[], names: string[]): boolean => {
+        return names.every(n => headers.some(h => eqCI(h, n)));
+    }
+
+    const h = loader.headers;
+
     // OpenCL 形：x = cu * (max(wf)+1) + wf, y = cycle
-    if (hasAll(H, ["cycle", "cu", "wf"])) {
-        const cycle = findHeader(H, "cycle")!;
-        const cu = findHeader(H, "cu")!;
-        const wf = findHeader(H, "wf")!;
-        const state = findHeader(H, "state");
+    if (hasAll(h, ["cycle", "cu", "wf"])) {
+        const cycle = findHeader(h, "cycle")!;
+        const cu = findHeader(h, "cu")!;
+        const wf = findHeader(h, "wf")!;
+        const state = findHeader(h, "state");
         const wfBase = base(wf);
         return {
             axisX: `${cu} * ${wfBase} + ${wf}`,
@@ -269,10 +264,10 @@ function inferViewSpec(loader: Loader): ViewSpec {
     }
 
     // TAGE 形：x = Bank * 8 + (TblIdx % 8), y = __index__
-    if (hasAll(H, ["Bank", "TblIdx"])) {
-        const bank = findHeader(H, "Bank")!;
-        const tbl = findHeader(H, "TblIdx")!;
-        const actual = findHeader(H, "Actual");
+    if (hasAll(h, ["Bank", "TblIdx"])) {
+        const bank = findHeader(h, "Bank")!;
+        const tbl = findHeader(h, "TblIdx")!;
+        const actual = findHeader(h, "Actual");
         return {
             axisX: `${bank} * 8 + (${tbl} % 8)`,
             axisY: "__index__",
@@ -281,37 +276,30 @@ function inferViewSpec(loader: Loader): ViewSpec {
     }
 
     // フォールバック：
-    //   Y は先頭2列を可能なら線形化: y0 * base(y1) + y1
-    //   X は次の2列を可能なら線形化: x0 * base(x1) + x1
-    //   どちらも無ければ __index__
-    const y0 = H[0];
-    const x0 = H[1];
-    const y1 = H[2];
-    const x1 = H[3];
-    const st = H[4] ?? null;
-
-    const axisY =
-        y0 && y1 ? `${y0} * ${base(y1)} + ${y1}` :
-        y0 ? `${y0}` :
-        "__index__";
-
-    const axisX =
-        x0 && x1 ? `${x0} * ${base(x1)} + ${x1}` :
-        x0 ? `${x0}` :
-        "__index__";
-
-    return {
-        axisX,
-        axisY,
-        stateField: st
-    };
+    // 列数が1:  y = __index__ , x = 1列目
+    // 列数が2:  y = 1列目     , x = 2列目
+    // 列数>=3:  y = 1列目     , x = 2列目 , state = 3列目
+    const n = h.length;
+    if (n === 0) {
+        // データが無い場合の安全策
+        return { axisX: "__index__", axisY: "__index__", stateField: null };
+    } else if (n === 1) {
+        const c0 = h[0];
+        return { axisX: `${c0}`, axisY: "__index__", stateField: null };
+    } else if (n === 2) {
+        const c0 = h[0], c1 = h[1];
+        return { axisX: `${c1}`, axisY: `${c0}`, stateField: null };
+    } else {
+        const c0 = h[0], c1 = h[1], c2 = h[2];
+        return { axisX: `${c1}`, axisY: `${c0}`, stateField: c2 };
+    }
 }
 
 // エクスポート API
 const GetDataView = (loader: Loader): DataViewIF => {
     const spec = inferViewSpec(loader);
     const view = new UnifiedDataView();
-    (view as UnifiedDataView).init(loader, spec);
+    view.init(loader, spec);
     return view;
 };
 
