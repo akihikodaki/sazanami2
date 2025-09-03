@@ -1,4 +1,4 @@
-import { Loader, DataViewIF } from "./loader";
+import { Loader, DataView } from "./loader";
 import { RectRendererSoft, RectRendererWebGL } from "./rect_renderer";
 
 /**
@@ -20,7 +20,7 @@ class RendererContext {
 
     numRows = 0;                       // number of rows in the data
 
-    dataView: DataViewIF|null = null;
+    dataView: DataView | null = null;
 
     // 描画されたピクセルのインデックスを保持
     // マウスオーバー時に使用

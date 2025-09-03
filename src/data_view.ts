@@ -11,17 +11,6 @@ type ViewSpec = {
     stateField?: string | null;   
 };
 
-interface DataViewIF {
-    getX(i: number): number;
-    getY(i: number): number;
-    getState(i: number): number;
-    getStartIdx(yStart: number): number;
-    getEndIdx(yEnd: number): number;
-    getMaxX(): number;
-    getMaxY(): number;
-    getMinY(): number;
-}
-
 // ColumnBuffer と同等に使える最小限の型
 // 仮想 行インデクスで使用
 interface NumberColumn {
@@ -199,7 +188,7 @@ class AxisProjector {
 }
 
 // 汎用 DataView 実装（式ベース）
-class UnifiedDataView implements DataViewIF {
+class DataView {
     private spec!: ViewSpec;
 
     private xAxis = new AxisProjector();
@@ -315,11 +304,11 @@ const inferViewSpec = (loader: Loader): ViewSpec => {
 }
 
 // エクスポート API
-const GetDataView = (loader: Loader): DataViewIF => {
+const GetDataView = (loader: Loader): DataView => {
     const spec = inferViewSpec(loader);
-    const view = new UnifiedDataView();
+    const view = new DataView();
     view.init(loader, spec);
     return view;
 };
 
-export { DataViewIF, GetDataView };
+export { DataView, GetDataView };

@@ -1,5 +1,5 @@
 import { FileLineReader } from "./file_line_reader";
-import { GetDataView, DataViewIF } from "./data_view";
+import { GetDataView, DataView } from "./data_view";
 
 // STRING_CODE は，同一の文字列に対して連続したコードを割り当てる
 // 文字列が多い場合は RAW_STRING にする
@@ -71,7 +71,7 @@ class Loader {
     private columnsArr_: ColumnBuffer[] = [];
 
     // DataView のキャッシュ
-    private dataView_: DataViewIF | null = null;
+    private dataView_: DataView | null = null;
     private dataViewInvalidated_: boolean = false;
 
     // 型検出用
@@ -347,7 +347,7 @@ class Loader {
         return this.lineNum - 1;
     }
 
-    public GetDataView(): DataViewIF {
+    public GetDataView(): DataView {
         if (!this.dataView_ || this.dataViewInvalidated_) {
             this.dataView_ = GetDataView(this);
             this.dataViewInvalidated_ = false;
@@ -356,4 +356,4 @@ class Loader {
     }
 }
 
-export { Loader, ColumnType, ColumnBuffer, DataViewIF };
+export { Loader, ColumnType, ColumnBuffer, DataView };
