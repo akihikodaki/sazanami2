@@ -70,6 +70,10 @@ class Loader {
     // データ保持
     private columnsArr_: ColumnBuffer[] = [];
 
+    // DataView のキャッシュ
+    private dataView_: DataViewIF | null = null;
+    private dataViewInvalidated_: boolean = false;
+
     // 型検出用
     private rawBuffer_: { [column: string]: string[] } = {};
     private detection_: { [column: string]: ColumnType } = {};
@@ -104,6 +108,8 @@ class Loader {
             this.reader_.cancel();
             this.reader_ = null;
         }
+        this.dataView_ = null;
+        this.dataViewInvalidated_ = false;
     }
 
     load(
@@ -121,6 +127,7 @@ class Loader {
             (line: string) => { // onLineRead
                 this.parseLine_(line, errorCallback);
                 if (this.lineNum % Loader.REPORT_INTERVAL === 0) {
+                    this.dataViewInvalidated_ = true;
                     progressCallback(reader.getProgress(), this.lineNum);
                 }
                 this.lineNum++;
@@ -341,7 +348,11 @@ class Loader {
     }
 
     public GetDataView(): DataViewIF {
-        return GetDataView(this);
+        if (!this.dataView_ || this.dataViewInvalidated_) {
+            this.dataView_ = GetDataView(this);
+            this.dataViewInvalidated_ = false;
+        }
+        return this.dataView_;
     }
 }
 

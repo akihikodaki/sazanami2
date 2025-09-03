@@ -160,7 +160,15 @@ class CanvasRenderer {
         const endIdx   = dataView.getEndIdx(yStart + visibleRows - 1);
 
         // drawnIndex を gridCols × gridRows で初期化
+        if (renderCtx.drawnIndex?.length != gridCols * gridRows) {
         renderCtx.drawnIndex = new Int32Array(gridCols * gridRows).fill(-1);
+        }
+        else {
+            renderCtx.drawnIndex.fill(-1);
+        }
+
+        const gridColRatio = gridCols / visibleCols;
+        const gridRowRatio = gridRows / visibleRows;
 
         // 描画まびき
         // X 方向の密度に応じても間引き量をかえる
@@ -187,8 +195,8 @@ class CanvasRenderer {
 
             if (col >= 0 && col < visibleCols && row >= 0 && row < visibleRows) {
                 // 大きい解像度を小さい grid にマップ
-                const gridCol = Math.floor(col * gridCols / visibleCols);
-                const gridRow = Math.floor(row * gridRows / visibleRows);
+                const gridCol = Math.floor(col * gridColRatio);
+                const gridRow = Math.floor(row * gridRowRatio);
                 const cellIndex = gridRow * gridCols + gridCol;
                 renderCtx.drawnIndex[cellIndex] = i;
             }
