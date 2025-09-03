@@ -1,16 +1,10 @@
 import { Loader, ColumnBuffer } from "./loader";
 
-// 汎用スキーマ表現（x/y ともに最大2列までを想定）
+// ビュー仕様：軸は式（最大2変数）。__index__ を使うと行インデクス。
 type ViewSpec = {
-    x: string[];
-    y: string[];
-    xIsIndex?: boolean;               // x を行インデクスとして扱うか（内部では仮想カラムに変換）
-    yIsIndex?: boolean;               // y を行インデクスとして扱うか（内部では仮想カラムに変換）
-    stateField?: string | null;       // 色（状態）列名。なければ null
-    xRadix?: Record<string, number>;  // x 各列の基数（未指定は col.stat.max + 1）
-    xMod?: Record<string, number>;    // x 各列の剰余（v % mod）
-    yRadix?: Record<string, number>;  // y 各列の基数（未指定は col.stat.max + 1）
-    yMod?: Record<string, number>;    // y 各列の剰余（v % mod）
+    axisX: string;                // 例: "__index__", "cu * 9 + wf", "Bank * 8 + (TblIdx % 8)"
+    axisY: string;                // 例: "cycle", "__index__", "y0 * 1000 + y1"
+    stateField?: string | null;   // 色（状態）列名。なければ null
 };
 
 interface DataViewIF {
@@ -31,21 +25,7 @@ interface NumberColumn {
     stat: { min: number; max: number };
 }
 
-// 大文字小文字を無視した等価判定
-const eqCI = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
-
-// 指定名に一致するヘッダを検索（大文字小文字無視）
-function findHeader(headers: string[], name: string): string | null {
-    const hit = headers.find(h => eqCI(h, name));
-    return hit ?? null;
-}
-
-// すべての列名が存在するか確認
-function hasAll(headers: string[], names: string[]): boolean {
-    return names.every(n => headers.some(h => eqCI(h, n)));
-}
-
-// 行インデクスを返す仮想カラム（x/y ともに分岐無しで処理するため）
+// 行インデクスを返す仮想カラム
 class IndexColumn implements NumberColumn {
     private nRows: number;
     stat: { min: number; max: number };
@@ -58,104 +38,73 @@ class IndexColumn implements NumberColumn {
     }
 }
 
-// 軸の初期化用パラメータ（共通）
+// 軸初期化引数（式を与える）
 type AxisInit = {
-    names: string[];                  // 使用する列名（最大2）
-    radix?: Record<string, number>;   // 各列の基数
-    mod?: Record<string, number>;     // 各列の剰余
-    asIndex?: boolean;                // 行インデクスとして仮想カラムを使うか
+    axis: string;     // "__index__" や "cu * 8 + (wf % 8)" など
 };
 
-// 軸の線形化・検索を共通化する小クラス
+// 軸の線形化・探索（式→コンパイル）
 class AxisProjector {
-    private names: string[] = [];
-    private cols: NumberColumn[] = [];    // getNumber/stat を持つ列群
-    private mult: number[] = [];          // 混合基数の乗数（右端が最下位）
-    private mods: number[] = [];          // 各列の mod（0 は mod 無し）
+    private expr: string = "";
+    private varNames: string[] = [];                 // 式に出現する変数（最大2）
+    private cols: NumberColumn[] = [];               // 変数に対応する列（IndexColumn を含む）
+    private compiled!: (...args: number[]) => number;// new Function で作る合成関数
     private numRows = 0;
 
-    private minLinear = 0;                // 線形化後の最小値（目安）
-    private maxLinear = 0;                // 線形化後の最大値（目安）
+    private minLinear = 0;                           // データから実測した最小
+    private maxLinear = 0;                           // データから実測した最大
 
-    // v0raw / v1raw を受け取って線形化するクロージャ（列数に応じて事前コンパイル）
-    private combine1?: (v0raw: number) => number;
-    private combine2?: (v0raw: number, v1raw: number) => number;
-
-    init(loader: Loader, axis: AxisInit, numRows: number) {
+    init(loader: Loader, axisInit: AxisInit, numRows: number) {
+        this.expr = axisInit.axis.trim();
         this.numRows = numRows;
 
-        // asIndex 指定や names なしは仮想カラム（IndexColumn）に置き換える
-        if (axis.asIndex || axis.names.length === 0) {
-            this.names = ["__index__"];
-            this.cols = [new IndexColumn(numRows)];
-        } else {
-            this.names = axis.names.slice(0, 2);
-            this.cols = this.names.map(n => loader.columnFromName(n) as unknown as NumberColumn);
+        // 変数抽出（識別子を列名と解釈、最大2個まで）
+        this.varNames = AxisProjector.extractVariables(this.expr);
+        if (this.varNames.length > 2) {
+            throw new Error(`Axis expression uses more than 2 variables: ${this.expr}`);
         }
 
-        // 基数を確定（未指定は col.stat.max + 1）
-        const bases = this.cols.map((col, idx) => {
-            const name = this.names[idx];
-            const explicit = axis.radix?.[name];
-            if (explicit != null) return explicit;
-            return col.stat.max + 1;
+        // 対応する列を束縛（__index__ は仮想カラム）
+        this.cols = this.varNames.map(name => {
+            if (name === "__index__") return new IndexColumn(numRows);
+            // ColumnBuffer を NumberColumn として扱う
+            return loader.columnFromName(name) as unknown as NumberColumn;
         });
 
-        // 乗数を構築（右端が最下位桁）
-        this.mult = AxisProjector.buildMultipliers(bases);
+        // 安全性のため簡易サニタイズ（数字・演算子・括弧・空白・識別子のみ許可）
+        if (!AxisProjector.isSafeExpression(this.expr)) {
+            throw new Error(`Unsafe axis expression: ${this.expr}`);
+        }
 
-        // mod を確定（0 は mod 無し）
-        this.mods = this.cols.map((_, idx) => axis.mod?.[this.names[idx]] ?? 0);
+        // 変数名を引数名に置換して Function をコンパイル
+        const argNames = this.varNames.map((_, i) => `v${i}raw`); // v0raw, v1raw
+        const rewritten = AxisProjector.rewriteExpression(this.expr, this.varNames, argNames);
+        const body = `return (${rewritten});`;
+        this.compiled = new Function(...argNames, body) as (...args: number[]) => number;
 
-        // min/max（概算）：mod 指定があれば [0, mod-1]、なければ列の統計値を使用
-        const perMin = this.cols.map((col, idx) => (this.mods[idx] ? 0 : col.stat.min));
-        const perMax = this.cols.map((col, idx) => (this.mods[idx] ? this.mods[idx] - 1 : col.stat.max));
-
-        this.minLinear = perMin.reduce((s, v, i) => s + v * this.mult[i], 0);
-        this.maxLinear = perMax.reduce((s, v, i) => s + v * this.mult[i], 0);
-
-        // ===== ここで value の計算をするクロージャを事前コンパイル =====
-        if (this.cols.length === 1) {
-            const m0 = this.mult[0] ?? 1;
-            const mod0 = this.mods[0] ?? 0;
-            if (mod0) {
-                this.combine1 = (v0raw: number) => (v0raw % mod0) * m0;
-            } else {
-                this.combine1 = (v0raw: number) => v0raw * m0;
+        // 実データを 1 パスして min/max を実測（正確）
+        if (numRows > 0) {
+            let minV = Number.POSITIVE_INFINITY;
+            let maxV = Number.NEGATIVE_INFINITY;
+            for (let i = 0; i < numRows; i++) {
+                const val = this.evalAt(i);
+                if (val < minV) minV = val;
+                if (val > maxV) maxV = val;
             }
-            this.combine2 = undefined;
+            this.minLinear = Number.isFinite(minV) ? minV : 0;
+            this.maxLinear = Number.isFinite(maxV) ? maxV : 0;
         } else {
-            const m0 = this.mult[0] ?? 1;
-            const m1 = this.mult[1] ?? 1;
-            const mod0 = this.mods[0] ?? 0;
-            const mod1 = this.mods[1] ?? 0;
-            if (mod0 && mod1) {
-                this.combine2 = (v0raw: number, v1raw: number) => (v0raw % mod0) * m0 + (v1raw % mod1) * m1;
-            } else if (mod0 && !mod1) {
-                this.combine2 = (v0raw: number, v1raw: number) => (v0raw % mod0) * m0 + v1raw * m1;
-            } else if (!mod0 && mod1) {
-                this.combine2 = (v0raw: number, v1raw: number) => v0raw * m0 + (v1raw % mod1) * m1;
-            } else {
-                this.combine2 = (v0raw: number, v1raw: number) => v0raw * m0 + v1raw * m1;
-            }
-            this.combine1 = undefined;
+            this.minLinear = 0;
+            this.maxLinear = 0;
         }
     }
 
-    // 値の線形化（getNumber で生値を取り出し、事前コンパイルしたクロージャに渡す）
+    // i 行目で式を評価（getNumber → コンパイル済み関数）
     value(i: number): number {
-        if (this.combine1) {
-            const v0raw = this.cols[0].getNumber(i);
-            return this.combine1(v0raw);
-        }
-        // 2列想定
-        const v0raw = this.cols[0].getNumber(i);
-        const v1raw = this.cols[1].getNumber(i);
-        // combine2 は init で必ず用意されている前提（2列時）
-        return this.combine2!(v0raw, v1raw);
+        return this.evalAt(i);
     }
 
-    // 二分探索（ビット演算は使用しない）
+    // 二分探索（ビット演算は使わない）
     lowerBound(target: number): number {
         let lo = 0;
         let hi = this.numRows;
@@ -167,28 +116,73 @@ class AxisProjector {
         return lo;
     }
 
-    private static buildMultipliers(bases: number[]): number[] {
-        const n = bases.length;
-        if (n === 0) return [];
-        const mult = new Array(n).fill(1);
-        for (let i = n - 2; i >= 0; i--) {
-            mult[i] = mult[i + 1] * bases[i + 1];
-        }
-        return mult;
-    }
-
     getMin(): number { return this.minLinear; }
     getMax(): number { return this.maxLinear; }
+
+    // 内部：i 行目の raw 値を取り出して compiled に渡す
+    private evalAt(i: number): number {
+        if (this.cols.length === 0) {
+            // 変数が無い定数式
+            return (this.compiled as () => number)();
+        } else if (this.cols.length === 1) {
+            const v0raw = this.cols[0].getNumber(i);
+            return (this.compiled as (v0raw: number) => number)(v0raw);
+        } else {
+            const v0raw = this.cols[0].getNumber(i);
+            const v1raw = this.cols[1].getNumber(i);
+            return (this.compiled as (v0raw: number, v1raw: number) => number)(v0raw, v1raw);
+        }
+    }
+
+    // 識別子抽出（簡易）：英数字と '_' からなる単語を列名候補に
+    private static extractVariables(expr: string): string[] {
+        const idRegex = /\b[A-Za-z_][A-Za-z0-9_]*\b/g;
+        const disallow = new Set([
+            // JS 予約語（最低限）
+            "return","var","let","const","function","new","this","if","else","for","while","do","switch","case","break","continue","try","catch","finally","throw",
+            "class","extends","super","import","export","default","delete","in","instanceof","typeof","void","yield","await","with","debugger",
+            // グローバル識別子
+            "Math","Number","String","Boolean","Array","Object","Date","JSON","RegExp","Infinity","NaN","undefined","null"
+        ]);
+        const vars = new Set<string>();
+        let m: RegExpExecArray | null;
+        while ((m = idRegex.exec(expr)) !== null) {
+            const id = m[0];
+            if (disallow.has(id)) continue;
+            // 数字のみや即値は拾わない（この正規表現では数字始まりはヒットしない）
+            vars.add(id);
+        }
+        return Array.from(vars);
+    }
+
+    // 変数名 → 引数名に安全に置換（単語境界）
+    private static rewriteExpression(expr: string, vars: string[], args: string[]): string {
+        let rewritten = expr;
+        for (let i = 0; i < vars.length; i++) {
+            const v = vars[i];
+            const a = args[i];
+            const re = new RegExp(`\\b${v}\\b`, "g");
+            rewritten = rewritten.replace(re, a);
+        }
+        return rewritten;
+    }
+
+    // 許可トークンのみかの簡易チェック
+    private static isSafeExpression(expr: string): boolean {
+        // 許容：数字・小数点・空白・演算子 + - * / % () そして識別子・下線
+        // セミコロンや =、?、:、{}、[] などは不許可
+        const safe = /^[0-9\s+\-*/%().A-Za-z_]+$/.test(expr);
+        return safe;
+    }
 }
 
-// 汎用 DataView 実装（x/y を AxisProjector で完全共通化）
+// 汎用 DataView 実装（式ベース）
 class UnifiedDataView implements DataViewIF {
     private spec!: ViewSpec;
 
     private xAxis = new AxisProjector();
     private yAxis = new AxisProjector();
     private stateCol: ColumnBuffer | null = null;
-
     private numRows_ = 0;
 
     test(_headers: string[]): boolean {
@@ -199,44 +193,18 @@ class UnifiedDataView implements DataViewIF {
         this.spec = spec;
         this.numRows_ = loader.numRows;
 
-        // x 軸の初期化（xIsIndex に対応）
-        const xAsIndex = !!spec.xIsIndex || spec.x.length === 0;
-        this.xAxis.init(
-            loader,
-            {
-                names: xAsIndex ? [] : spec.x,
-                radix: spec.xRadix,
-                mod: spec.xMod,
-                asIndex: xAsIndex
-            },
-            this.numRows_
-        );
+        this.xAxis.init(loader, { axis: spec.axisX }, this.numRows_);
+        this.yAxis.init(loader, { axis: spec.axisY }, this.numRows_);
 
-        // y 軸の初期化（yIsIndex に対応）
-        const yAsIndex = !!spec.yIsIndex || spec.y.length === 0;
-        this.yAxis.init(
-            loader,
-            {
-                names: yAsIndex ? [] : spec.y,
-                radix: spec.yRadix,
-                mod: spec.yMod,
-                asIndex: yAsIndex
-            },
-            this.numRows_
-        );
-
-        // state 列
         this.stateCol = spec.stateField ? loader.columnFromName(spec.stateField) : null;
     }
 
     getX(i: number): number {
         return this.xAxis.value(i);
     }
-
     getY(i: number): number {
         return this.yAxis.value(i);
     }
-
     getState(i: number): number {
         if (!this.stateCol) return 0;
         return this.stateCol.getNumber(i);
@@ -245,7 +213,6 @@ class UnifiedDataView implements DataViewIF {
     getStartIdx(yStart: number): number {
         return this.yAxis.lowerBound(yStart);
     }
-
     getEndIdx(yEnd: number): number {
         return Math.min(this.yAxis.lowerBound(yEnd), this.numRows_);
     }
@@ -261,69 +228,79 @@ class UnifiedDataView implements DataViewIF {
     }
 }
 
-// スキーマ推論（従来ルールを踏襲しつつ xIsIndex にも対応）
+// ヘッダから式を推論し、定数を埋め込む（radix/mod は式内にリテラル）
 function inferViewSpec(loader: Loader): ViewSpec {
-    const headers = loader.headers;
+    const H = loader.headers;
 
-    // OpenCL 形
-    if (hasAll(headers, ["cycle", "cu", "wf"])) {
-        const cycle = findHeader(headers, "cycle")!;
-        const cu = findHeader(headers, "cu")!;
-        const wf = findHeader(headers, "wf")!;
-        const state = findHeader(headers, "state");
+    // ヘルパ：列の基数（= max+1）を取得
+    const base = (name: string) => loader.columnFromName(name).stat.max + 1;
 
-        const wfMax = loader.columnFromName(wf).stat.max + 1;
-
+    // OpenCL 形：x = cu * (max(wf)+1) + wf, y = cycle
+    if (hasAll(H, ["cycle", "cu", "wf"])) {
+        const cycle = findHeader(H, "cycle")!;
+        const cu = findHeader(H, "cu")!;
+        const wf = findHeader(H, "wf")!;
+        const state = findHeader(H, "state");
+        const wfBase = base(wf);
         return {
-            x: [cu, wf],
-            y: [cycle],
-            xIsIndex: false,
-            yIsIndex: false,
-            stateField: state ?? null,
-            xRadix: { [wf]: wfMax }
+            axisX: `${cu} * ${wfBase} + ${wf}`,
+            axisY: `${cycle}`,
+            stateField: state ?? null
         };
     }
 
-    // TAGE 形
-    if (hasAll(headers, ["Bank", "TblIdx"])) {
-        const bank = findHeader(headers, "Bank")!;
-        const tbl = findHeader(headers, "TblIdx")!;
-        const actual = findHeader(headers, "Actual");
-        const bankBase = loader.columnFromName(bank).stat.max + 1;
-
+    // TAGE 形：x = Bank * 8 + (TblIdx % 8), y = __index__
+    if (hasAll(H, ["Bank", "TblIdx"])) {
+        const bank = findHeader(H, "Bank")!;
+        const tbl = findHeader(H, "TblIdx")!;
+        const actual = findHeader(H, "Actual");
+        // Bank の上位桁は 8（TblIdx の基数）を掛ける
         return {
-            x: [bank, tbl],
-            y: [],                      // y は行インデクス（仮想カラムに変換される）
-            xIsIndex: false,
-            yIsIndex: true,
-            stateField: actual ?? null,
-            xRadix: { [bank]: bankBase, [tbl]: 8 },
-            xMod: { [tbl]: 8 }
+            axisX: `${bank} * 8 + (${tbl} % 8)`,
+            axisY: "__index__",
+            stateField: actual ?? null
         };
     }
 
-    // フォールバック：先頭2列を y、次の2列を x とする（不足分は index 化）
-    const y1 = headers[0];
-    const x1 = headers[1];
-    const y2 = headers[2];
-    const x2 = headers[3];
-    const st = headers[4] ?? null;
+    // フォールバック：
+    //   Y は先頭2列を可能なら線形化: y0 * base(y1) + y1
+    //   X は次の2列を可能なら線形化: x0 * base(x1) + x1
+    //   どれも無い場合は __index__
+    const y0 = H[0];
+    const x0 = H[1];
+    const y1 = H[2];
+    const x1 = H[3];
+    const st = H[4] ?? null;
 
-    const y: string[] = [];
-    if (y1) y.push(y1);
-    if (y2) y.push(y2);
+    const axisY =
+        y0 && y1 ? `${y0} * ${base(y1)} + ${y1}` :
+        y0 ? `${y0}` :
+        "__index__";
 
-    const x: string[] = [];
-    if (x1) x.push(x1);
-    if (x2) x.push(x2);
+    const axisX =
+        x0 && x1 ? `${x0} * ${base(x1)} + ${x1}` :
+        x0 ? `${x0}` :
+        "__index__";
 
     return {
-        x,
-        y,
-        stateField: st,
-        xIsIndex: x.length === 0,
-        yIsIndex: y.length === 0
+        axisX,
+        axisY,
+        stateField: st
     };
+}
+
+// 大文字小文字を無視した等価判定
+function eqCI(a: string, b: string) { return a.toLowerCase() === b.toLowerCase(); }
+
+// 指定名に一致するヘッダを検索
+function findHeader(headers: string[], name: string): string | null {
+    const hit = headers.find(h => eqCI(h, name));
+    return hit ?? null;
+}
+
+// すべての列名が存在するか確認
+function hasAll(headers: string[], names: string[]): boolean {
+    return names.every(n => headers.some(h => eqCI(h, n)));
 }
 
 // エクスポート API
