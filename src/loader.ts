@@ -108,6 +108,8 @@ class Loader {
             this.reader_.cancel();
             this.reader_ = null;
         }
+        this.dataView_ = null;
+        this.dataViewInvalidated_ = false;
     }
 
     load(
