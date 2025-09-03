@@ -92,8 +92,10 @@ class RectRendererWebGL {
         }
 
         // オーバーレイのサイズを 2D キャンバスと一致させる
-        this.overlayCanvas_.width = canvas.width;
-        this.overlayCanvas_.height = canvas.height;
+        if (this.overlayCanvas_.width != canvas.width || this.overlayCanvas_.height != canvas.height) {
+            this.overlayCanvas_.width = canvas.width;
+            this.overlayCanvas_.height = canvas.height;
+        }
 
         // バッチ状態リセット
         this.rawMode_ = true;
