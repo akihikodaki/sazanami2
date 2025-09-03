@@ -47,7 +47,10 @@ class AxisProjector {
     private expr: string = "";
     private varNames: string[] = [];                  // 式に出現する変数（最大2）
     private cols: NumberColumn[] = [];                // 変数に対応する列（IndexColumn を含む）
-    private compiled!: (...args: number[]) => number; // new Function で作る合成関数
+    
+    private compiledExp_!: (...args: number[]) => number;       // new Function で作る合成関数
+    private fastExp_: ((i: number) => number) | null = null;    // fast path: 単一変数の恒等式なら直接列を読むクロージャ
+
     private numRows_ = 0;
 
     private min_ = 0;                           // 近似最小
@@ -74,28 +77,36 @@ class AxisProjector {
             throw new Error(`Unsafe axis expression: ${this.expr}`);
         }
 
+        if (this.varNames.length === 1 && this.isIdentityExpr_(this.expr, this.varNames[0])) {
+            const c0 = this.cols[0];
+            this.fastExp_ = (i: number) => c0.getNumber(i);
+            this.min_ = c0.stat.min;
+            this.max_ = c0.stat.max;
+            return; // コンパイルは不要
+        }
+
         // 変数名を引数名に置換して Function をコンパイル
         const argNames = this.varNames.map((_, i) => `v${i}raw`); // v0raw, v1raw
         const rewritten = this.rewriteExpression_(this.expr, this.varNames, argNames);
         const body = `return (${rewritten});`;
-        this.compiled = new Function(...argNames, body) as (...args: number[]) => number;
+        this.compiledExp_ = new Function(...argNames, body) as (...args: number[]) => number;
 
         // min/max を「各列の min/max の組み合わせ評価」で推定する
         const k = this.cols.length;
         if (k === 0) {
-            const v = (this.compiled as () => number)();
+            const v = (this.compiledExp_ as () => number)();
             this.min_ = v;
             this.max_ = v;
         } else if (k === 1) {
             const c0 = this.cols[0];
-            const a = (this.compiled as (v0raw: number) => number)(c0.stat.min);
-            const b = (this.compiled as (v0raw: number) => number)(c0.stat.max);
+            const a = (this.compiledExp_ as (v0raw: number) => number)(c0.stat.min);
+            const b = (this.compiledExp_ as (v0raw: number) => number)(c0.stat.max);
             this.min_ = Math.min(a, b);
             this.max_ = Math.max(a, b);
         } else {
             const c0 = this.cols[0];
             const c1 = this.cols[1];
-            const eval2 = this.compiled as (v0raw: number, v1raw: number) => number;
+            const eval2 = this.compiledExp_ as (v0raw: number, v1raw: number) => number;
 
             // 4つのコーナー（(min,min), (min,max), (max,min), (max,max)）
             const v00 = eval2(c0.stat.min, c1.stat.min);
@@ -110,11 +121,15 @@ class AxisProjector {
 
     // コンパイル済み関数を使って展開
     value(i: number): number {
+        if (this.fastExp_) {
+            return this.fastExp_(i);
+        }
+        
         const k = this.cols.length;
         let v0raw = 0, v1raw = 0;
         if (k >= 1) { v0raw = this.cols[0].getNumber(i); } 
         if (k >= 2) { v1raw = this.cols[1].getNumber(i); }
-        return this.compiled(v0raw, v1raw);
+        return this.compiledExp_(v0raw, v1raw);
     }
 
     // 二分探索
@@ -131,6 +146,16 @@ class AxisProjector {
 
     getMin(): number { return this.min_; }
     getMax(): number { return this.max_; }
+    
+    // 式が単一変数の恒等式か（空白・外側の括弧は無視）
+    private isIdentityExpr_(expr: string, varName: string): boolean {
+        let s = expr.replace(/\s+/g, "");
+        // 外側の括弧を可能な限り剥がす
+        while (s.startsWith("(") && s.endsWith(")")) {
+            s = s.slice(1, -1);
+        }
+        return s === varName;
+    }
 
     // 識別子抽出（簡易）：英数字と '_' からなる単語を列名候補に
     private extractVariables_(expr: string): string[] {
