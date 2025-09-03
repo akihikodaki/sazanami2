@@ -20,10 +20,8 @@ interface NumberColumn {
 
 // 行インデクスを返す仮想カラム
 class IndexColumn implements NumberColumn {
-    private nRows: number;
     stat: { min: number; max: number };
     constructor(nRows: number) {
-        this.nRows = nRows;
         this.stat = { min: 0, max: Math.max(0, nRows - 1) };
     }
     getNumber(i: number): number {
@@ -33,9 +31,9 @@ class IndexColumn implements NumberColumn {
 
 // 軸の線形化・探索（式→コンパイル）
 class AxisProjector {
-    private expr: string = "";
-    private varNames: string[] = [];                  // 式に出現する変数（最大2）
-    private cols: NumberColumn[] = [];                // 変数に対応する列（IndexColumn を含む）
+    private expr_: string = "";
+    private varNames_: string[] = [];                  // 式に出現する変数（最大2）
+    private cols_: NumberColumn[] = [];                // 変数に対応する列（IndexColumn を含む）
     
     private compiledExp_!: (...args: number[]) => number;       // new Function で作る合成関数
     private fastExp_: ((i: number) => number) | null = null;    // fast path: 単一変数の恒等式なら直接列を読むクロージャ
@@ -46,28 +44,28 @@ class AxisProjector {
     private max_ = 0;                           // 近似最大
 
     init(loader: Loader, axisExpr: string, numRows: number) {
-        this.expr = axisExpr.trim();
+        this.expr_ = axisExpr.trim();
         this.numRows_ = numRows;
 
         // 変数抽出（識別子を列名と解釈、最大2個まで）
-        this.varNames = this.extractVariables_(this.expr);
-        if (this.varNames.length > 2) {
-            throw new Error(`Axis expression uses more than 2 variables: ${this.expr}`);
+        this.varNames_ = this.extractVariables_(this.expr_);
+        if (this.varNames_.length > 2) {
+            throw new Error(`Axis expression uses more than 2 variables: ${this.expr_}`);
         }
 
         // 対応する列を束縛（__index__ は仮想カラム）
-        this.cols = this.varNames.map(name => {
+        this.cols_ = this.varNames_.map(name => {
             if (name === "__index__") return new IndexColumn(numRows);
             return loader.columnFromName(name) as unknown as NumberColumn;
         });
 
         // 簡易サニタイズ（数字・演算子・括弧・空白・識別子のみ許可）
-        if (!this.isSafeExpression_(this.expr)) {
-            throw new Error(`Unsafe axis expression: ${this.expr}`);
+        if (!this.isSafeExpression_(this.expr_)) {
+            throw new Error(`Unsafe axis expression: ${this.expr_}`);
         }
 
-        if (this.varNames.length === 1 && this.isIdentityExpr_(this.expr, this.varNames[0])) {
-            const c0 = this.cols[0];
+        if (this.varNames_.length === 1 && this.isIdentityExpr_(this.expr_, this.varNames_[0])) {
+            const c0 = this.cols_[0];
             this.fastExp_ = (i: number) => c0.getNumber(i);
             this.min_ = c0.stat.min;
             this.max_ = c0.stat.max;
@@ -75,26 +73,26 @@ class AxisProjector {
         }
 
         // 変数名を引数名に置換して Function をコンパイル
-        const argNames = this.varNames.map((_, i) => `v${i}raw`); // v0raw, v1raw
-        const rewritten = this.rewriteExpression_(this.expr, this.varNames, argNames);
+        const argNames = this.varNames_.map((_, i) => `v${i}raw`); // v0raw, v1raw
+        const rewritten = this.rewriteExpression_(this.expr_, this.varNames_, argNames);
         const body = `return (${rewritten});`;
         this.compiledExp_ = new Function(...argNames, body) as (...args: number[]) => number;
 
         // min/max を「各列の min/max の組み合わせ評価」で推定する
-        const k = this.cols.length;
+        const k = this.cols_.length;
         if (k === 0) {
             const v = (this.compiledExp_ as () => number)();
             this.min_ = v;
             this.max_ = v;
         } else if (k === 1) {
-            const c0 = this.cols[0];
+            const c0 = this.cols_[0];
             const a = (this.compiledExp_ as (v0raw: number) => number)(c0.stat.min);
             const b = (this.compiledExp_ as (v0raw: number) => number)(c0.stat.max);
             this.min_ = Math.min(a, b);
             this.max_ = Math.max(a, b);
         } else {
-            const c0 = this.cols[0];
-            const c1 = this.cols[1];
+            const c0 = this.cols_[0];
+            const c1 = this.cols_[1];
             const eval2 = this.compiledExp_ as (v0raw: number, v1raw: number) => number;
 
             // 4つのコーナー（(min,min), (min,max), (max,min), (max,max)）
@@ -114,10 +112,10 @@ class AxisProjector {
             return this.fastExp_(i);
         }
         
-        const k = this.cols.length;
+        const k = this.cols_.length;
         let v0raw = 0, v1raw = 0;
-        if (k >= 1) { v0raw = this.cols[0].getNumber(i); } 
-        if (k >= 2) { v1raw = this.cols[1].getNumber(i); }
+        if (k >= 1) { v0raw = this.cols_[0].getNumber(i); } 
+        if (k >= 2) { v1raw = this.cols_[1].getNumber(i); }
         return this.compiledExp_(v0raw, v1raw);
     }
 
@@ -189,7 +187,7 @@ class AxisProjector {
 
 // 汎用 DataView 実装（式ベース）
 class DataView {
-    private spec!: ViewSpec;
+    private spec_!: ViewSpec;
 
     private xAxis = new AxisProjector();
     private yAxis = new AxisProjector();
@@ -197,7 +195,7 @@ class DataView {
     private numRows_ = 0;
 
     init(loader: Loader, spec: ViewSpec) {
-        this.spec = spec;
+        this.spec_ = spec;
         this.numRows_ = loader.numRows;
 
         this.xAxis.init(loader, spec.axisX, this.numRows_);
@@ -232,6 +230,10 @@ class DataView {
     }
     getMinY(): number {
         return this.yAxis.getMin();
+    }
+
+    get spec() {
+        return this.spec_;
     }
 }
 
