@@ -25,6 +25,20 @@ interface NumberColumn {
     stat: { min: number; max: number };
 }
 
+// 大文字小文字を無視した等価判定
+const eqCI = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+
+// 指定名に一致するヘッダを検索（大文字小文字無視）
+function findHeader(headers: string[], name: string): string | null {
+    const hit = headers.find(h => eqCI(h, name));
+    return hit ?? null;
+}
+
+// すべての列名が存在するか確認
+function hasAll(headers: string[], names: string[]): boolean {
+    return names.every(n => headers.some(h => eqCI(h, n)));
+}
+
 // 行インデクスを返す仮想カラム
 class IndexColumn implements NumberColumn {
     private nRows: number;
@@ -51,8 +65,8 @@ class AxisProjector {
     private compiled!: (...args: number[]) => number;// new Function で作る合成関数
     private numRows = 0;
 
-    private minLinear = 0;                           // データから実測した最小
-    private maxLinear = 0;                           // データから実測した最大
+    private minLinear = 0;                           // 近似最小（コーナー評価）
+    private maxLinear = 0;                           // 近似最大（コーナー評価）
 
     init(loader: Loader, axisInit: AxisInit, numRows: number) {
         this.expr = axisInit.axis.trim();
@@ -67,11 +81,10 @@ class AxisProjector {
         // 対応する列を束縛（__index__ は仮想カラム）
         this.cols = this.varNames.map(name => {
             if (name === "__index__") return new IndexColumn(numRows);
-            // ColumnBuffer を NumberColumn として扱う
             return loader.columnFromName(name) as unknown as NumberColumn;
         });
 
-        // 安全性のため簡易サニタイズ（数字・演算子・括弧・空白・識別子のみ許可）
+        // 簡易サニタイズ（数字・演算子・括弧・空白・識別子のみ許可）
         if (!AxisProjector.isSafeExpression(this.expr)) {
             throw new Error(`Unsafe axis expression: ${this.expr}`);
         }
@@ -82,29 +95,51 @@ class AxisProjector {
         const body = `return (${rewritten});`;
         this.compiled = new Function(...argNames, body) as (...args: number[]) => number;
 
-        // 実データを 1 パスして min/max を実測（正確）
-        if (numRows > 0) {
-            let minV = Number.POSITIVE_INFINITY;
-            let maxV = Number.NEGATIVE_INFINITY;
-            for (let i = 0; i < numRows; i++) {
-                const val = this.evalAt(i);
-                if (val < minV) minV = val;
-                if (val > maxV) maxV = val;
-            }
-            this.minLinear = Number.isFinite(minV) ? minV : 0;
-            this.maxLinear = Number.isFinite(maxV) ? maxV : 0;
+        // ===== min/max を「各列の min/max の組み合わせ評価」で推定する =====
+        // 2次以上の式で厳密でない可能性は了承の前提
+        const k = this.cols.length;
+        if (k === 0) {
+            const v = (this.compiled as () => number)();
+            this.minLinear = v;
+            this.maxLinear = v;
+        } else if (k === 1) {
+            const c0 = this.cols[0];
+            const a = (this.compiled as (v0raw: number) => number)(c0.stat.min);
+            const b = (this.compiled as (v0raw: number) => number)(c0.stat.max);
+            this.minLinear = Math.min(a, b);
+            this.maxLinear = Math.max(a, b);
         } else {
-            this.minLinear = 0;
-            this.maxLinear = 0;
+            const c0 = this.cols[0];
+            const c1 = this.cols[1];
+            const eval2 = this.compiled as (v0raw: number, v1raw: number) => number;
+
+            // 4つのコーナー（(min,min), (min,max), (max,min), (max,max)）
+            const v00 = eval2(c0.stat.min, c1.stat.min);
+            const v01 = eval2(c0.stat.min, c1.stat.max);
+            const v10 = eval2(c0.stat.max, c1.stat.min);
+            const v11 = eval2(c0.stat.max, c1.stat.max);
+
+            this.minLinear = Math.min(v00, v01, v10, v11);
+            this.maxLinear = Math.max(v00, v01, v10, v11);
         }
     }
 
-    // i 行目で式を評価（getNumber → コンパイル済み関数）
+    // 値の線形化（getNumber → コンパイル済み関数）
     value(i: number): number {
-        return this.evalAt(i);
+        const k = this.cols.length;
+        if (k === 0) {
+            return (this.compiled as () => number)();
+        } else if (k === 1) {
+            const v0raw = this.cols[0].getNumber(i);
+            return (this.compiled as (v0raw: number) => number)(v0raw);
+        } else {
+            const v0raw = this.cols[0].getNumber(i);
+            const v1raw = this.cols[1].getNumber(i);
+            return (this.compiled as (v0raw: number, v1raw: number) => number)(v0raw, v1raw);
+        }
     }
 
-    // 二分探索（ビット演算は使わない）
+    // 二分探索（ビット演算は使用しない）
     lowerBound(target: number): number {
         let lo = 0;
         let hi = this.numRows;
@@ -118,21 +153,6 @@ class AxisProjector {
 
     getMin(): number { return this.minLinear; }
     getMax(): number { return this.maxLinear; }
-
-    // 内部：i 行目の raw 値を取り出して compiled に渡す
-    private evalAt(i: number): number {
-        if (this.cols.length === 0) {
-            // 変数が無い定数式
-            return (this.compiled as () => number)();
-        } else if (this.cols.length === 1) {
-            const v0raw = this.cols[0].getNumber(i);
-            return (this.compiled as (v0raw: number) => number)(v0raw);
-        } else {
-            const v0raw = this.cols[0].getNumber(i);
-            const v1raw = this.cols[1].getNumber(i);
-            return (this.compiled as (v0raw: number, v1raw: number) => number)(v0raw, v1raw);
-        }
-    }
 
     // 識別子抽出（簡易）：英数字と '_' からなる単語を列名候補に
     private static extractVariables(expr: string): string[] {
@@ -149,7 +169,6 @@ class AxisProjector {
         while ((m = idRegex.exec(expr)) !== null) {
             const id = m[0];
             if (disallow.has(id)) continue;
-            // 数字のみや即値は拾わない（この正規表現では数字始まりはヒットしない）
             vars.add(id);
         }
         return Array.from(vars);
@@ -254,7 +273,6 @@ function inferViewSpec(loader: Loader): ViewSpec {
         const bank = findHeader(H, "Bank")!;
         const tbl = findHeader(H, "TblIdx")!;
         const actual = findHeader(H, "Actual");
-        // Bank の上位桁は 8（TblIdx の基数）を掛ける
         return {
             axisX: `${bank} * 8 + (${tbl} % 8)`,
             axisY: "__index__",
@@ -265,7 +283,7 @@ function inferViewSpec(loader: Loader): ViewSpec {
     // フォールバック：
     //   Y は先頭2列を可能なら線形化: y0 * base(y1) + y1
     //   X は次の2列を可能なら線形化: x0 * base(x1) + x1
-    //   どれも無い場合は __index__
+    //   どちらも無ければ __index__
     const y0 = H[0];
     const x0 = H[1];
     const y1 = H[2];
@@ -287,20 +305,6 @@ function inferViewSpec(loader: Loader): ViewSpec {
         axisY,
         stateField: st
     };
-}
-
-// 大文字小文字を無視した等価判定
-function eqCI(a: string, b: string) { return a.toLowerCase() === b.toLowerCase(); }
-
-// 指定名に一致するヘッダを検索
-function findHeader(headers: string[], name: string): string | null {
-    const hit = headers.find(h => eqCI(h, name));
-    return hit ?? null;
-}
-
-// すべての列名が存在するか確認
-function hasAll(headers: string[], names: string[]): boolean {
-    return names.every(n => headers.some(h => eqCI(h, n)));
 }
 
 // エクスポート API
