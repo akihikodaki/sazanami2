@@ -305,12 +305,4 @@ const inferViewSpec = (loader: Loader): ViewSpec => {
     }
 }
 
-// エクスポート API
-const GetDataView = (loader: Loader): DataView => {
-    const spec = inferViewSpec(loader);
-    const view = new DataView();
-    view.init(loader, spec);
-    return view;
-};
-
-export { DataView, GetDataView };
+export { DataView, ViewSpec, inferViewSpec };
