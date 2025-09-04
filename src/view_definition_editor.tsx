@@ -443,6 +443,7 @@ const strictApply = (store: Store, testDef: ViewDefinition): { ok: boolean; erro
         dv.init(store.loader, testDef);
         // ここまで到達したら安全：即時反映
         store.trigger(ACTION.VIEW_DEF_APPLY, testDef);
+        store.trigger(ACTION.CANVAS_FIT);
         store.trigger(ACTION.SHOW_MESSAGE_IN_STATUS_BAR, "View updated");
         return { ok: true, errors: [] };
     } catch (e: any) {
