@@ -337,12 +337,16 @@ export class DataView {
         return lo;
     }
 
-    getStartIdx(yStart: number): number {
-        return this.lowerBound_(this.yCol_, yStart);
+    getStartIdx(xStart: number, yStart: number): number {
+        let xIndexStart = this.lowerBound_(this.xCol_, xStart);
+        let yIndexStart = this.lowerBound_(this.yCol_, yStart);
+        return Math.min(xIndexStart, yIndexStart);
     }
 
-    getEndIdx(yEnd: number): number {
-        return Math.min(this.lowerBound_(this.yCol_, yEnd), this.numRows_);
+    getEndIdx(xEnd: number, yEnd: number): number {
+        let xIndexEnd = Math.min(this.lowerBound_(this.xCol_, xEnd), this.numRows_);
+        let yIndexEnd = Math.min(this.lowerBound_(this.yCol_, yEnd), this.numRows_);
+        return Math.max(xIndexEnd, yIndexEnd);
     }
 
     getMaxX(): number { return this.xCol_.stat.max; }

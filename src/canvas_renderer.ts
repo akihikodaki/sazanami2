@@ -156,8 +156,8 @@ class CanvasRenderer {
         // 描画セルの start/end インデックス
         const xStart = Math.floor((offsetX - this.MARGIN_LEFT_) / scaleX);
         const yStart = Math.floor(offsetY / scaleY);
-        const startIdx = dataView.getStartIdx(yStart);
-        const endIdx   = dataView.getEndIdx(yStart + visibleRows - 1);
+        const startIdx = dataView.getStartIdx(xStart, yStart);
+        const endIdx   = dataView.getEndIdx(xStart + visibleCols - 1, yStart + visibleRows - 1);
 
         // drawnIndex を gridCols × gridRows で初期化
         if (renderCtx.drawnIndex?.length != gridCols * gridRows) {
@@ -172,7 +172,7 @@ class CanvasRenderer {
 
         // 描画まびき
         // X 方向の密度に応じても間引き量をかえる
-        const avgNumPointX = (dataView.getEndIdx(Infinity) - dataView.getStartIdx(-Infinity)) / (dataView.getMaxY() - dataView.getMinY());
+        const avgNumPointX = (dataView.getEndIdx(Infinity,Infinity) - dataView.getStartIdx(-Infinity, -Infinity)) / (dataView.getMaxY() - dataView.getMinY());
         let step = Math.max(1, Math.floor(ratioY * avgNumPointX / 4 / 32));
 
         // データ描画＆インデックス記録
