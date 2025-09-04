@@ -132,7 +132,7 @@ class Loader {
             (line: string) => { // onLineRead
                 this.parseLine_(line, errorCallback);
                 if (this.lineNum % Loader.REPORT_INTERVAL === 0) {
-                    this.dataViewInvalidated_ = true;
+                    this.dataViewInvalidated_ = true;   // max を更新した可能性があるので invalidate
                     progressCallback(reader.getProgress(), this.lineNum);
                 }
                 this.lineNum++;
@@ -141,6 +141,7 @@ class Loader {
                 if (!this.detectionDone_) {
                     this.finalizeTypes_();
                 }
+                this.dataViewInvalidated_ = true;   // max を更新した可能性があるので invalidate
                 let elapsed = ((new Date()).getTime() - this.startTime_);
                 console.log(`Loaded ${this.lineNum - 1} lines in ${elapsed} ms`);
                 finishCallback();
