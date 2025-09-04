@@ -1,25 +1,46 @@
+// data_view.ts
 import { Loader, ColumnBuffer } from "./loader";
 
-// ビュー仕様
+// 軸と色の仕様
 type ViewSpec = {
-    // 軸は式（最大2変数）
-    // __index__ を使うと仮想的に行インデクスになる
-    axisX: string;                
-    axisY: string;                
-
-    // 色（状態）列名。なければ null
-    stateField?: string | null;   
+    axisXField: string;
+    axisYField: string;
+    stateField?: string | null;
 };
 
-// ビュー仕様の中身が一致しているかどうかを判定する
-const isEqualViewSpec = (spec1: ViewSpec, spec2: ViewSpec): boolean =>{
-    return spec1.axisX === spec2.axisX &&
-           spec1.axisY === spec2.axisY &&
-           spec1.stateField === spec2.stateField;
-}
+// 行の仕様
+type ColumnSpec = Record<string, string>;
 
-// ColumnBuffer と同等に使える最小限の型
-// 仮想 行インデクスで使用
+// View と Columns をまとめた全体の仕様
+type ViewDefinition = {
+    view: ViewSpec;
+    columns: ColumnSpec;
+};
+
+// 一致比較
+export const isEqualViewDefinition = (a: ViewDefinition, b: ViewDefinition): boolean => {
+    const va = a.view, vb = b.view;
+    if (
+        va.axisXField !== vb.axisXField ||
+        va.axisYField !== vb.axisYField ||
+        (va.stateField ?? null) !== (vb.stateField ?? null)
+    ) {
+        return false;
+    }
+    const ca = a.columns ?? {};
+    const cb = b.columns ?? {};
+    const aKeys = Object.keys(ca).sort();
+    const bKeys = Object.keys(cb).sort();
+    if (aKeys.length !== bKeys.length) return false;
+    for (let i = 0; i < aKeys.length; i++) {
+        if (aKeys[i] !== bKeys[i]) return false;
+        const k = aKeys[i];
+        if (ca[k] !== cb[k]) return false;
+    }
+    return true;
+};
+
+// 内部で共有する最小インタフェース
 interface NumberColumn {
     getNumber(i: number): number;
     stat: { min: number; max: number };
@@ -28,64 +49,106 @@ interface NumberColumn {
 // 行インデクスを返す仮想カラム
 class IndexColumn implements NumberColumn {
     stat: { min: number; max: number };
+    private nRows_: number;
+
     constructor(nRows: number) {
+        this.nRows_ = nRows;
         this.stat = { min: 0, max: Math.max(0, nRows - 1) };
     }
+
     getNumber(i: number): number {
         return i;
     }
 }
 
-// 軸の線形化・探索（式→コンパイル）
-class AxisProjector {
-    private expr_: string = "";
-    private varNames_: string[] = [];                  // 式に出現する変数（最大2）
-    private cols_: NumberColumn[] = [];                // 変数に対応する列（IndexColumn を含む）
-    
-    private compiledExp_!: (...args: number[]) => number;       // new Function で作る合成関数
-    private fastExp_: ((i: number) => number) | null = null;    // fast path: 単一変数の恒等式なら直接列を読むクロージャ
-
+// 仮想列で使用する式エンジン
+class ExpressionProjector {
+    private expr_ = "";
+    private varNames_: string[] = [];
+    private cols_: NumberColumn[] = [];
+    private compiledExp_!: (...args: number[]) => number;
+    private fastExp_: ((i: number) => number) | null = null;
     private numRows_ = 0;
+    private min_ = 0;
+    private max_ = 0;
 
-    private min_ = 0;                           // 近似最小
-    private max_ = 0;                           // 近似最大
+    static isSafeExpression(expr: string): boolean {
+        // 許容：数字・小数点・空白・演算子 + - * / % () 、識別子・下線
+        // セミコロンや =、?、:、{}、[] などは禁止
+        return /^[0-9\s+\-*/%().A-Za-z_]+$/.test(expr);
+    }
 
-    init(loader: Loader, axisExpr: string, numRows: number) {
-        this.expr_ = axisExpr.trim();
+    static extractVariables(expr: string): string[] {
+        const idRegex = /\b[A-Za-z_][A-Za-z0-9_]*\b/g;
+        const disallow = new Set([
+            "return","var","let","const","function","new","this","if","else","for","while","do","switch","case",
+            "break","continue","try","catch","finally","throw","class","extends","super","import","export","default",
+            "delete","in","instanceof","typeof","void","yield","await","with","debugger",
+            "Math","Number","String","Boolean","Array","Object","Date","JSON","RegExp","Infinity","NaN","undefined","null"
+        ]);
+        const vars = new Set<string>();
+        let m: RegExpExecArray | null;
+        while ((m = idRegex.exec(expr)) !== null) {
+            const id = m[0];
+            if (disallow.has(id)) continue;
+            vars.add(id);
+        }
+        return Array.from(vars);
+    }
+
+    static isIdentityExpr(expr: string, varName: string): boolean {
+        let s = expr.replace(/\s+/g, "");
+        while (s.startsWith("(") && s.endsWith(")")) {
+            s = s.slice(1, -1);
+        }
+        return s === varName;
+    }
+
+    private rewriteExpression_(expr: string, vars: string[], args: string[]): string {
+        let rewritten = expr;
+        for (let i = 0; i < vars.length; i++) {
+            const v = vars[i];
+            const a = args[i];
+            const re = new RegExp(`\\b${v}\\b`, "g");
+            rewritten = rewritten.replace(re, a);
+        }
+        return rewritten;
+    }
+
+    init(resolveColumn: (name: string) => NumberColumn, expr: string, numRows: number) {
+        this.expr_ = expr.trim();
         this.numRows_ = numRows;
 
-        // 変数抽出（識別子を列名と解釈、最大2個まで）
-        this.varNames_ = this.extractVariables_(this.expr_);
+        // 変数抽出（最大2）
+        this.varNames_ = ExpressionProjector.extractVariables(this.expr_);
         if (this.varNames_.length > 2) {
-            throw new Error(`Axis expression uses more than 2 variables: ${this.expr_}`);
+            throw new Error(`Expression uses more than 2 variables: ${this.expr_}`);
         }
 
-        // 対応する列を束縛（__index__ は仮想カラム）
-        this.cols_ = this.varNames_.map(name => {
-            if (name === "__index__") return new IndexColumn(numRows);
-            return loader.columnFromName(name) as unknown as NumberColumn;
-        });
+        // 列束縛
+        this.cols_ = this.varNames_.map(name => resolveColumn(name));
 
-        // 簡易サニタイズ（数字・演算子・括弧・空白・識別子のみ許可）
-        if (!this.isSafeExpression_(this.expr_)) {
-            throw new Error(`Unsafe axis expression: ${this.expr_}`);
+        // サニタイズ
+        if (!ExpressionProjector.isSafeExpression(this.expr_)) {
+            throw new Error(`Unsafe expression: ${this.expr_}`);
         }
 
-        if (this.varNames_.length === 1 && this.isIdentityExpr_(this.expr_, this.varNames_[0])) {
+        // fast path: 単一変数の恒等式
+        if (this.varNames_.length === 1 && ExpressionProjector.isIdentityExpr(this.expr_, this.varNames_[0])) {
             const c0 = this.cols_[0];
             this.fastExp_ = (i: number) => c0.getNumber(i);
             this.min_ = c0.stat.min;
             this.max_ = c0.stat.max;
-            return; // コンパイルは不要
+            return;
         }
 
-        // 変数名を引数名に置換して Function をコンパイル
-        const argNames = this.varNames_.map((_, i) => `v${i}raw`); // v0raw, v1raw
+        // new Function コンパイル
+        const argNames = this.varNames_.map((_, i) => `v${i}raw`);
         const rewritten = this.rewriteExpression_(this.expr_, this.varNames_, argNames);
         const body = `return (${rewritten});`;
         this.compiledExp_ = new Function(...argNames, body) as (...args: number[]) => number;
 
-        // min/max を「各列の min/max の組み合わせ評価」で推定する
+        // min/max 推定（列 min/max を用いたコーナー評価）
         const k = this.cols_.length;
         if (k === 0) {
             const v = (this.compiledExp_ as () => number)();
@@ -101,174 +164,210 @@ class AxisProjector {
             const c0 = this.cols_[0];
             const c1 = this.cols_[1];
             const eval2 = this.compiledExp_ as (v0raw: number, v1raw: number) => number;
-
-            // 4つのコーナー（(min,min), (min,max), (max,min), (max,max)）
             const v00 = eval2(c0.stat.min, c1.stat.min);
             const v01 = eval2(c0.stat.min, c1.stat.max);
             const v10 = eval2(c0.stat.max, c1.stat.min);
             const v11 = eval2(c0.stat.max, c1.stat.max);
-
             this.min_ = Math.min(v00, v01, v10, v11);
             this.max_ = Math.max(v00, v01, v10, v11);
         }
     }
 
-    // コンパイル済み関数を使って展開
     value(i: number): number {
-        if (this.fastExp_) {
-            return this.fastExp_(i);
-        }
-        
+        if (this.fastExp_) return this.fastExp_(i);
         const k = this.cols_.length;
         let v0raw = 0, v1raw = 0;
-        if (k >= 1) { v0raw = this.cols_[0].getNumber(i); } 
-        if (k >= 2) { v1raw = this.cols_[1].getNumber(i); }
+        if (k >= 1) v0raw = this.cols_[0].getNumber(i);
+        if (k >= 2) v1raw = this.cols_[1].getNumber(i);
         return this.compiledExp_(v0raw, v1raw);
     }
 
-    // 二分探索
-    lowerBound(target: number): number {
+    getMin(): number { return this.min_; }
+    getMax(): number { return this.max_; }
+}
+
+// 式の評価結果を返す仮想数値カラム 
+class ExpressionColumn implements NumberColumn {
+    readonly name: string;
+    private projector_: ExpressionProjector;
+    stat: { min: number; max: number };
+
+    constructor(name: string, projector: ExpressionProjector) {
+        this.name = name;
+        this.projector_ = projector;
+        this.stat = { min: projector.getMin(), max: projector.getMax() };
+    }
+
+    getNumber(i: number): number {
+        return this.projector_.value(i);
+    }
+}
+
+// 仮想カラムレジストリ
+// 仮想列は他の仮想列を参照不可
+class VirtualColumnRegistry {
+    private defs_ = new Map<string, string>();           // name → expr
+    private columns_ = new Map<string, NumberColumn>();   // name → 実体
+    private loader_!: Loader;
+    private numRows_ = 0;
+
+    bind(loader: Loader) {
+        this.loader_ = loader;
+        this.numRows_ = loader.numRows;
+    }
+
+    add(name: string, expr: string) {
+        const errors = collectColumnSpecErrors(this.loader_, { [name]: expr }, new Set(this.defs_.keys()));
+        if (errors.length > 0) {
+            throw new Error(errors.join("\n"));
+        }
+        this.defs_.set(name, expr);
+    }
+
+    list(): string[] {
+        return Array.from(this.defs_.keys());
+    }
+
+    compileAll() {
+        // 追加時に検証済みだが、未知列などの安全側チェックも再実施
+        const errors = collectColumnSpecErrors(this.loader_, Object.fromEntries(this.defs_), new Set());
+        if (errors.length > 0) {
+            throw new Error(errors.join("\n"));
+        }
+
+        const resolveColumn = (name: string): NumberColumn => {
+            if (name === "__index__") return new IndexColumn(this.numRows_);
+            // 仮想列参照は不可（仕様）
+            if (this.defs_.has(name) || this.columns_.has(name)) {
+                throw new Error(`Virtual column may not reference another virtual column: ${name}`);
+            }
+            const col = this.loader_.columnFromName(name) as unknown as NumberColumn;
+            if (!col || typeof col.getNumber !== "function") {
+                throw new Error(`Unknown column: ${name}`);
+            }
+            return col;
+        };
+
+        for (const [name, expr] of this.defs_) {
+            const projector = new ExpressionProjector();
+            projector.init(resolveColumn, expr, this.numRows_);
+            const col = new ExpressionColumn(name, projector);
+            this.columns_.set(name, col);
+        }
+    }
+
+    get(name: string): NumberColumn | undefined {
+        return this.columns_.get(name);
+    }
+}
+
+// 公開 DataView
+export class DataView {
+    private def_!: ViewDefinition;
+    private numRows_ = 0;
+    private xCol_!: NumberColumn;
+    private yCol_!: NumberColumn;
+    private stateCol_: NumberColumn | null = null;
+
+    // 内部レジストリ（非公開）
+    private registry_ = new VirtualColumnRegistry();
+
+    // ColumnSpec が loader に対して追加可能かどうかを事前検証する。
+    // エラーがある場合は ok:false とエラーメッセージ配列を返す。
+    validateColumnSpec(loader: Loader, columns: ColumnSpec): { ok: boolean; errors: string[] } {
+        const errors = collectColumnSpecErrors(loader, columns, new Set());
+        return { ok: errors.length === 0, errors };
+    }
+
+    // DataView は Definition を受け取って初期化する
+    init(loader: Loader, def: ViewDefinition): void {
+        const spec = def.view;
+        const columns = def.columns ?? {};
+
+        this.numRows_ = loader.numRows;
+
+        // レジストリ準備
+        this.registry_.bind(loader);
+
+        // ColumnSpec 登録（仮想→実体化）
+        if (Object.keys(columns).length > 0) {
+            const validation = this.validateColumnSpec(loader, columns);
+            if (!validation.ok) {
+                throw new Error(validation.errors.join("\n"));
+            }
+            for (const [name, expr] of Object.entries(columns)) {
+                this.registry_.add(name, expr);
+            }
+            this.registry_.compileAll();
+        }
+
+        // 列解決
+        const resolveByName = (name: string): NumberColumn => {
+            if (name === "__index__") return new IndexColumn(this.numRows_);
+            const vcol = this.registry_.get(name);
+            if (vcol) return vcol;
+            return loader.columnFromName(name) as unknown as NumberColumn;
+        };
+
+        this.xCol_ = resolveByName(spec.axisXField);
+        this.yCol_ = resolveByName(spec.axisYField);
+        this.stateCol_ = spec.stateField ? resolveByName(spec.stateField) : null;
+
+        this.def_ = { view: { ...spec }, columns: { ...columns } };
+    }
+
+    // 引数で与えられた definition と一致しているか（View + Columns）
+    isEqualViewDefinition(def: ViewDefinition): boolean {
+        return isEqualViewDefinition(this.def_, def);
+    }
+
+    getX(i: number): number { return this.xCol_.getNumber(i); }
+    getY(i: number): number { return this.yCol_.getNumber(i); }
+    getState(i: number): number { return this.stateCol_ ? this.stateCol_.getNumber(i) : 0; }
+
+    // 2分探索
+    lowerBound_(col: NumberColumn, target: number): number {
         let lo = 0;
         let hi = this.numRows_;
         while (lo < hi) {
             const mid = Math.floor((lo + hi) / 2);
-            if (this.value(mid) < target) lo = mid + 1;
+            if (col.getNumber(mid) < target) lo = mid + 1;
             else hi = mid;
         }
         return lo;
     }
 
-    getMin(): number { return this.min_; }
-    getMax(): number { return this.max_; }
-    
-    // 式が単一変数の恒等式か（空白・外側の括弧は無視）
-    private isIdentityExpr_(expr: string, varName: string): boolean {
-        let s = expr.replace(/\s+/g, "");
-        // 外側の括弧を可能な限り剥がす
-        while (s.startsWith("(") && s.endsWith(")")) {
-            s = s.slice(1, -1);
-        }
-        return s === varName;
-    }
-
-    // 識別子抽出（簡易）：英数字と '_' からなる単語を列名候補に
-    private extractVariables_(expr: string): string[] {
-        const idRegex = /\b[A-Za-z_][A-Za-z0-9_]*\b/g;
-        const disallow = new Set([
-            // JS 予約語（最低限）
-            "return","var","let","const","function","new","this","if","else","for","while","do","switch","case","break","continue","try","catch","finally","throw",
-            "class","extends","super","import","export","default","delete","in","instanceof","typeof","void","yield","await","with","debugger",
-            // グローバル識別子
-            "Math","Number","String","Boolean","Array","Object","Date","JSON","RegExp","Infinity","NaN","undefined","null"
-        ]);
-        const vars = new Set<string>();
-        let m: RegExpExecArray | null;
-        while ((m = idRegex.exec(expr)) !== null) {
-            const id = m[0];
-            if (disallow.has(id)) continue;
-            vars.add(id);
-        }
-        return Array.from(vars);
-    }
-
-    // 変数名 → 引数名に安全に置換（単語境界）
-    private rewriteExpression_(expr: string, vars: string[], args: string[]): string {
-        let rewritten = expr;
-        for (let i = 0; i < vars.length; i++) {
-            const v = vars[i];
-            const a = args[i];
-            const re = new RegExp(`\\b${v}\\b`, "g");
-            rewritten = rewritten.replace(re, a);
-        }
-        return rewritten;
-    }
-
-    // 許可トークンのみかの簡易チェック
-    private isSafeExpression_(expr: string): boolean {
-        // 許容：数字・小数点・空白・演算子 + - * / % () そして識別子・下線
-        // セミコロンや =、?、:、{}、[] などは不許可
-        const safe = /^[0-9\s+\-*/%().A-Za-z_]+$/.test(expr);
-        return safe;
-    }
-}
-
-// 汎用 DataView 実装（式ベース）
-class DataView {
-    private spec_!: ViewSpec;
-
-    private xAxis = new AxisProjector();
-    private yAxis = new AxisProjector();
-    private stateCol: ColumnBuffer | null = null;
-    private numRows_ = 0;
-
-    init(loader: Loader, spec: ViewSpec) {
-        this.spec_ = spec;
-        this.numRows_ = loader.numRows;
-
-        this.xAxis.init(loader, spec.axisX, this.numRows_);
-        this.yAxis.init(loader, spec.axisY, this.numRows_);
-
-        this.stateCol = spec.stateField ? loader.columnFromName(spec.stateField) : null;
-    }
-
-    getX(i: number): number {
-        return this.xAxis.value(i);
-    }
-    getY(i: number): number {
-        return this.yAxis.value(i);
-    }
-    getState(i: number): number {
-        if (!this.stateCol) return 0;
-        return this.stateCol.getNumber(i);
-    }
-
     getStartIdx(yStart: number): number {
-        return this.yAxis.lowerBound(yStart);
+        return this.lowerBound_(this.yCol_, yStart);
     }
+
     getEndIdx(yEnd: number): number {
-        return Math.min(this.yAxis.lowerBound(yEnd), this.numRows_);
+        return Math.min(this.lowerBound_(this.yCol_, yEnd), this.numRows_);
     }
 
-    getMaxX(): number {
-        return this.xAxis.getMax();
-    }
-    getMaxY(): number {
-        return this.yAxis.getMax();
-    }
-    getMinY(): number {
-        return this.yAxis.getMin();
-    }
+    getMaxX(): number { return this.xCol_.stat.max; }
+    getMaxY(): number { return this.yCol_.stat.max; }
+    getMinY(): number { return this.yCol_.stat.min; }
 
-    get spec() {
-        return this.spec_;
-    }
+    // spec ではなく definition を返す 
+    get definition(): ViewDefinition { return { view: { ...this.def_.view }, columns: { ...this.def_.columns } }; }
 }
 
-// ヘッダから式を推論し、定数を埋め込む（radix/mod は式内にリテラル）
-const inferViewSpec = (loader: Loader): ViewSpec => {
-
-    // ヘルパ：列の基数（= max+1）を取得
-    const base = (name: string) => loader.columnFromName(name).stat.max + 1;
-
-    // 大文字小文字を無視した等価判定
-    const eqCI = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
-
-    // 指定名に一致するヘッダを検索（大文字小文字無視）
-    const findHeader = (headers: string[], name: string): string | null => {
-        const hit = headers.find(h => eqCI(h, name));
-        return hit ?? null;
-    }
-
-    // すべての列名が存在するか確認
-    const hasAll = (headers: string[], names: string[]): boolean => {
-        return names.every(n => headers.some(h => eqCI(h, n)));
-    }
-
+// 必要に応じて仮想列と列の仕様を返す
+export const inferViewDefinition = (loader: Loader): ViewDefinition => {
     const h = loader.headers;
-
     if (h.length === 0) {
-        throw Error("Cannot infer view spec: no columns");
+        return {
+            view: { axisXField: "__index__", axisYField: "__index__", stateField: null },
+            columns: {}
+        };
     }
+
+    const eqCI = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+    const findHeader = (headers: string[], name: string) => headers.find(h => eqCI(h, name)) ?? null;
+    const hasAll = (headers: string[], names: string[]) => names.every(n => headers.some(h => eqCI(h, n)));
+
+    const base = (name: string) => (loader.columnFromName(name) as ColumnBuffer).stat.max + 1;
 
     // OpenCL 形：x = cu * (max(wf)+1) + wf, y = cycle
     if (hasAll(h, ["cycle", "cu", "wf"])) {
@@ -277,10 +376,11 @@ const inferViewSpec = (loader: Loader): ViewSpec => {
         const wf = findHeader(h, "wf")!;
         const state = findHeader(h, "state");
         const wfBase = base(wf);
+        const xExpr = `${cu} * ${wfBase} + ${wf}`;
+        const xName = "cu_wf";
         return {
-            axisX: `${cu} * ${wfBase} + ${wf}`,
-            axisY: `${cycle}`,
-            stateField: state ?? null
+            view: { axisXField: xName, axisYField: cycle, stateField: state ?? null },
+            columns: { [xName]: xExpr }
         };
     }
 
@@ -289,31 +389,102 @@ const inferViewSpec = (loader: Loader): ViewSpec => {
         const bank = findHeader(h, "Bank")!;
         const tbl = findHeader(h, "TblIdx")!;
         const actual = findHeader(h, "Actual");
+        const xExpr = `${bank} * 8 + (${tbl} % 8)`;
+        const xName = "bank_and_idx";
         return {
-            axisX: `${bank} * 8 + (${tbl} % 8)`,
-            axisY: "__index__",
-            stateField: actual ?? null
+            view: { axisXField: xName, axisYField: "__index__", stateField: actual ?? null },
+            columns: { [xName]: xExpr }
         };
     }
 
-    // フォールバック：
-    // 列数が1:  y = __index__ , x = 1列目
-    // 列数が2:  y = 1列目     , x = 2列目
-    // 列数>=3:  y = 1列目     , x = 2列目 , state = 3列目
+    // フォールバック
     const n = h.length;
-    if (n === 0) {
-        // データが無い場合の安全策
-        return { axisX: "__index__", axisY: "__index__", stateField: null };
-    } else if (n === 1) {
+    if (n === 1) {
         const c0 = h[0];
-        return { axisX: `${c0}`, axisY: "__index__", stateField: null };
+        return {
+            view: { axisXField: c0, axisYField: "__index__", stateField: null },
+            columns: {}
+        };
     } else if (n === 2) {
         const c0 = h[0], c1 = h[1];
-        return { axisX: `${c1}`, axisY: `${c0}`, stateField: null };
+        return {
+            view: { axisXField: c1, axisYField: c0, stateField: null },
+            columns: {}
+        };
     } else {
         const c0 = h[0], c1 = h[1], c2 = h[2];
-        return { axisX: `${c1}`, axisY: `${c0}`, stateField: c2 };
+        return {
+            view: { axisXField: c1, axisYField: c0, stateField: c2 },
+            columns: {}
+        };
     }
+};
+
+//  add/compileAll の事前チェックを共通化
+//  既存列名と衝突したら常にエラー（大文字小文字は無視して判定）
+//  仮想列は他の仮想列を参照不可
+//  未知の列参照、非安全式、3変数以上はエラー
+const collectColumnSpecErrors = (
+    loader: Loader,
+    columns: ColumnSpec,
+    existingVirtualNames: Set<string>
+): string[] => {
+    const errors: string[] = [];
+    const headers = loader.headers;
+    const realLC = new Set(headers.map(h => h.toLowerCase()));
+    const specNames = Object.keys(columns);
+    const specNameSet = new Set<string>();
+
+    for (const name of specNames) {
+        if (!name) {
+            errors.push("Virtual column name must be non-empty.");
+            continue;
+        }
+        if (specNameSet.has(name)) {
+            errors.push(`Duplicate virtual column name in ColumnSpec: '${name}'.`);
+        } else {
+            specNameSet.add(name);
+        }
+        if (realLC.has(name.toLowerCase())) {
+            errors.push(`Virtual column name collides with real column: '${name}'.`);
+        }
+        if (existingVirtualNames.has(name)) {
+            errors.push(`Virtual column already defined: '${name}'.`);
+        }
+    }
+
+    for (const [name, expr] of Object.entries(columns)) {
+        if (!expr) {
+            errors.push(`Expression for virtual column '${name}' must be non-empty.`);
+            continue;
+        }
+        if (!ExpressionProjector.isSafeExpression(expr)) {
+            errors.push(`Unsafe virtual column expression for '${name}': ${expr}`);
+            continue;
+        }
+
+        const vars = ExpressionProjector.extractVariables(expr);
+        if (vars.length > 2) {
+            errors.push(`Virtual column '${name}' uses more than 2 variables (${vars.length}).`);
+        }
+
+        for (const v of vars) {
+            if (v === "__index__") continue;
+
+            // 仮想列参照は禁止（自分以外の spec 内/既存仮想）
+            if (specNameSet.has(v) || existingVirtualNames.has(v)) {
+                errors.push(`Virtual column '${name}' may not reference another virtual column '${v}'.`);
+                continue;
+            }
+
+            // 実在列チェック（厳密：大文字小文字も一致させる）
+            if (!headers.includes(v)) {
+                errors.push(`Unknown column referenced in '${name}': '${v}'.`);
+            }
+        }
+    }
+
+    return errors;
 }
 
-export { DataView, ViewSpec, inferViewSpec, isEqualViewSpec };
+export { ViewSpec, ColumnSpec, ViewDefinition };

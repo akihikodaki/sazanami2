@@ -1,5 +1,5 @@
 import { FileLineReader } from "./file_line_reader";
-import { inferViewSpec, ViewSpec, DataView, isEqualViewSpec } from "./data_view";
+import { inferViewDefinition, ViewDefinition, DataView, isEqualViewDefinition } from "./data_view";
 
 // STRING_CODE は，同一の文字列に対して連続したコードを割り当てる
 // 文字列が多い場合は RAW_STRING にする
@@ -347,14 +347,14 @@ class Loader {
         return this.lineNum - 1;
     }
 
-    public GetDataView(dataViewSpec: ViewSpec|null = null): DataView {
+    public GetDataView(dataViewDef: ViewDefinition|null = null): DataView {
         if (!this.dataView_ || this.dataViewInvalidated_  || 
-            (dataViewSpec && !isEqualViewSpec(dataViewSpec, this.dataView_.spec))
+            (dataViewDef && !isEqualViewDefinition(dataViewDef, this.dataView_.definition))
         ) {
-            if (!dataViewSpec)
-                dataViewSpec = inferViewSpec(this);
+            if (!dataViewDef)
+                dataViewDef = inferViewDefinition(this);
             this.dataView_ = new DataView();
-            this.dataView_.init(this, dataViewSpec);
+            this.dataView_.init(this, dataViewDef);
             this.dataViewInvalidated_ = false;
         }
         return this.dataView_;

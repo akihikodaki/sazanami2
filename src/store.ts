@@ -1,5 +1,5 @@
 import { Loader } from "./loader";
-import { inferViewSpec, ViewSpec } from "./data_view";
+import { ViewDefinition } from "./data_view";
 
 enum ACTION {
     FILE_LOAD,
@@ -32,7 +32,7 @@ class Store {
     handlers_: { [key: number]: Array<(...args: any[]) => void> } = {};
 
     loader: Loader;
-    viewSpec: ViewSpec|null = null; // 現在のビュー仕様
+    viewDef: ViewDefinition|null = null; // 現在のビュー仕様
 
     // Settings panelを表示するかどうか
     showSettings: boolean = false;
@@ -41,7 +41,7 @@ class Store {
         this.loader = new Loader();
 
         this.on(ACTION.FILE_LOAD, (file: File) => {
-            this.viewSpec = null; // 新しいファイルをロードするときはビュー仕様をリセット
+            this.viewDef = null; // 新しいファイルをロードするときはビュー仕様をリセット
             this.trigger(CHANGE.FILE_LOADING_START);
             this.loader.load(
                 file, 
