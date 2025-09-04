@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState } from "react";
 import Store, { ACTION, CHANGE } from "./store";
+import ViewDefinitionEditor from "./view_definition_editor";
 
 
 import {Nav, Navbar, NavDropdown} from "react-bootstrap";
@@ -220,7 +221,7 @@ type SplitContainerProps = {
 const SplitContainer: React.FC<SplitContainerProps> = ({
     leftPanel,
     rightPanel,
-    defaultShowSettings = false,
+    defaultShowSettings = true,
     defaultRightWidth = 320,
     store
 }) => {
@@ -296,7 +297,6 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
 };
 
 const SettingsPanel: React.FC<{ store: Store }> = ({ store }) => {
-
     return (
         <div style={{ 
             display: "flex", flexDirection: "column", height: "100%" 
@@ -315,15 +315,14 @@ const SettingsPanel: React.FC<{ store: Store }> = ({ store }) => {
                 </button>
             </div>
 
-            {/* Body*/}
-            <div className="settings-body">
-                <p style={{ margin: 0, opacity: 0.85 }}>
-                    Settings
-                </p>
+            {/* Body → ViewDefinitionEditor */}
+            <div className="settings-body" style={{ padding: 12, overflow: "auto" }}>
+                <ViewDefinitionEditor store={store} />
             </div>
         </div>
     );
 };
+
 
 
 

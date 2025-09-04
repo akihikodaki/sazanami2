@@ -1,5 +1,5 @@
 import { FileLineReader } from "./file_line_reader";
-import { GetDataView, DataView } from "./data_view";
+import { inferViewDefinition, ViewDefinition, DataView, isEqualViewDefinition } from "./data_view";
 
 // STRING_CODE は，同一の文字列に対して連続したコードを割り当てる
 // 文字列が多い場合は RAW_STRING にする
@@ -86,6 +86,8 @@ class Loader {
     private startTime_: number = 0;
     private reader_: FileLineReader | null = null;
 
+    private onFormatDetected_: null | (() => void) = null;
+
     get detectionDone() { return this.detectionDone_; }
 
     constructor() {
@@ -110,15 +112,18 @@ class Loader {
         }
         this.dataView_ = null;
         this.dataViewInvalidated_ = false;
+        this.onFormatDetected_ = null;
     }
 
     load(
         file: File,
         finishCallback: () => void,
+        formatDetected: () => void,
         progressCallback: (progress: number, lineNum: number) => void,
         errorCallback: (error: any, lineNum: number) => void
     ) {
         this.reset();
+        this.onFormatDetected_ = formatDetected;
         let reader = new FileLineReader(file);
         this.reader_ = reader;
         this.startTime_ = (new Date()).getTime();
@@ -241,6 +246,8 @@ class Loader {
             });
             delete this.rawBuffer_[header];
         });
+
+        this.onFormatDetected_?.();
     }
 
     private pushValue(index: number, raw: string): void {
@@ -347,9 +354,14 @@ class Loader {
         return this.lineNum - 1;
     }
 
-    public GetDataView(): DataView {
-        if (!this.dataView_ || this.dataViewInvalidated_) {
-            this.dataView_ = GetDataView(this);
+    public GetDataView(dataViewDef: ViewDefinition|null = null): DataView {
+        if (!this.dataView_ || this.dataViewInvalidated_  || 
+            (dataViewDef && !isEqualViewDefinition(dataViewDef, this.dataView_.definition))
+        ) {
+            if (!dataViewDef)
+                dataViewDef = inferViewDefinition(this);
+            this.dataView_ = new DataView();
+            this.dataView_.init(this, dataViewDef);
             this.dataViewInvalidated_ = false;
         }
         return this.dataView_;
