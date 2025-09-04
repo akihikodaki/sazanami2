@@ -349,8 +349,7 @@ export class DataView {
     getMaxY(): number { return this.yCol_.stat.max; }
     getMinY(): number { return this.yCol_.stat.min; }
 
-    // spec ではなく definition を返す 
-    get definition(): ViewDefinition { return { view: { ...this.def_.view }, columns: { ...this.def_.columns } }; }
+    get definition() { return this.def_; }
 }
 
 // 必要に応じて仮想列と列の仕様を返す
