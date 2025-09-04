@@ -451,28 +451,28 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
             const canvasCtx = canvas.getContext("2d")!;
             renderer.clear(canvasCtx, renderCtx);
         };
+        const onFileFormatDetected = () => {
+            // 初回表示で範囲外だったらリセット
+            // if (renderCtx.offsetY + renderCtx.height < renderCtx.dataView.getMinY()) {
+            //     renderCtx.offsetY = renderCtx.dataView.getMinY();
+            // }
+            // if (renderCtx.offsetY > renderCtx.dataView.getMaxY()) {
+            //     renderCtx.offsetY = renderCtx.dataView.getMaxY() - renderCtx.height;
+            // }
+            renderCtx.dataView = store.loader.GetDataView(store.viewDef);
+            renderer.fitScaleToData(renderCtx, 1.0);
+        };
         const onContentUpdated = () => {
-            let firstTime = !renderCtx.dataView;
             if (!store.viewDef) {
-                let viewDef = inferViewDefinition(store.loader);
-                store.trigger(ACTION.SET_VIEW_SPEC, viewDef);
+                return; // まだフォーマットが確定しておらずビュー定義がない
             }
             renderCtx.dataView = store.loader.GetDataView(store.viewDef);
             renderCtx.numRows = store.loader.numRows;
-            // 初回表示で範囲外だったらリセット
-            if (firstTime) {
-                if (renderCtx.offsetY + renderCtx.height < renderCtx.dataView.getMinY()) {
-                    renderCtx.offsetY = renderCtx.dataView.getMinY();
-                }
-                if (renderCtx.offsetY > renderCtx.dataView.getMaxY()) {
-                    renderCtx.offsetY = renderCtx.dataView.getMaxY() - renderCtx.height;
-                }
-            }
-
             renderer.draw(canvas, renderCtx);
         };
         store.on(CHANGE.FILE_LOADED, onContentUpdated);
         store.on(CHANGE.FILE_LOADING_START, onFileLoadStarted);
+        store.on(CHANGE.FILE_FORMAT_DETECTED, onFileFormatDetected);
         store.on(CHANGE.CONTENT_UPDATED, onContentUpdated);
         store.on(CHANGE.CANVAS_FIT, () => {
             renderer.fitScaleToData(renderCtx, 1.0);

@@ -86,6 +86,8 @@ class Loader {
     private startTime_: number = 0;
     private reader_: FileLineReader | null = null;
 
+    private onFormatDetected_: null | (() => void) = null;
+
     get detectionDone() { return this.detectionDone_; }
 
     constructor() {
@@ -110,15 +112,18 @@ class Loader {
         }
         this.dataView_ = null;
         this.dataViewInvalidated_ = false;
+        this.onFormatDetected_ = null;
     }
 
     load(
         file: File,
         finishCallback: () => void,
+        formatDetected: () => void,
         progressCallback: (progress: number, lineNum: number) => void,
         errorCallback: (error: any, lineNum: number) => void
     ) {
         this.reset();
+        this.onFormatDetected_ = formatDetected;
         let reader = new FileLineReader(file);
         this.reader_ = reader;
         this.startTime_ = (new Date()).getTime();
@@ -241,6 +246,8 @@ class Loader {
             });
             delete this.rawBuffer_[header];
         });
+
+        this.onFormatDetected_?.();
     }
 
     private pushValue(index: number, raw: string): void {
