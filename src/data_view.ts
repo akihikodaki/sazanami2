@@ -43,17 +43,17 @@ export const isEqualViewDefinition = (a: ViewDefinition, b: ViewDefinition): boo
 // 内部で共有する最小インタフェース
 interface NumberColumn {
     getNumber(i: number): number;
-    stat: { min: number; max: number };
+    stat: { min: number; max: number, deviationFromMax: number };
 }
 
 // 行インデクスを返す仮想カラム
 class IndexColumn implements NumberColumn {
-    stat: { min: number; max: number };
+    stat: { min: number; max: number, deviationFromMax: number };
     private nRows_: number;
 
     constructor(nRows: number) {
         this.nRows_ = nRows;
-        this.stat = { min: 0, max: Math.max(0, nRows - 1) };
+        this.stat = { min: 0, max: Math.max(0, nRows - 1), deviationFromMax: 0 };
     }
 
     getNumber(i: number): number {
@@ -71,6 +71,7 @@ class ExpressionProjector {
     private numRows_ = 0;
     private min_ = 0;
     private max_ = 0;
+    private deviationFromMax_ = 0;
 
     static isSafeExpression(expr: string): boolean {
         // 許容：数字・小数点・空白・演算子 + - * / % () 、識別子・下線
@@ -154,12 +155,14 @@ class ExpressionProjector {
             const v = (this.compiledExp_ as () => number)();
             this.min_ = v;
             this.max_ = v;
+            this.deviationFromMax_ = 0;
         } else if (k === 1) {
             const c0 = this.cols_[0];
             const a = (this.compiledExp_ as (v0raw: number) => number)(c0.stat.min);
             const b = (this.compiledExp_ as (v0raw: number) => number)(c0.stat.max);
             this.min_ = Math.min(a, b);
             this.max_ = Math.max(a, b);
+            this.deviationFromMax_ = c0.stat.deviationFromMax;
         } else {
             const c0 = this.cols_[0];
             const c1 = this.cols_[1];
@@ -170,6 +173,11 @@ class ExpressionProjector {
             const v11 = eval2(c0.stat.max, c1.stat.max);
             this.min_ = Math.min(v00, v01, v10, v11);
             this.max_ = Math.max(v00, v01, v10, v11);
+            this.deviationFromMax_ = 
+                Math.min(
+                    this.max_ - this.min_,
+                    Math.max(c0.stat.deviationFromMax, c1.stat.deviationFromMax)
+                );
         }
     }
 
@@ -184,18 +192,19 @@ class ExpressionProjector {
 
     getMin(): number { return this.min_; }
     getMax(): number { return this.max_; }
+    getDeviationFromMax(): number { return this.deviationFromMax_; }
 }
 
 // 式の評価結果を返す仮想数値カラム 
 class ExpressionColumn implements NumberColumn {
     readonly name: string;
     private projector_: ExpressionProjector;
-    stat: { min: number; max: number };
+    stat: { min: number; max: number, deviationFromMax: number };
 
     constructor(name: string, projector: ExpressionProjector) {
         this.name = name;
         this.projector_ = projector;
-        this.stat = { min: projector.getMin(), max: projector.getMax() };
+        this.stat = { min: projector.getMin(), max: projector.getMax(), deviationFromMax: projector.getDeviationFromMax() };
     }
 
     getNumber(i: number): number {
@@ -340,13 +349,20 @@ export class DataView {
     getStartIdx(xStart: number, yStart: number): number {
         let xIndexStart = this.lowerBound_(this.xCol_, xStart);
         let yIndexStart = this.lowerBound_(this.yCol_, yStart);
-        return Math.min(xIndexStart, yIndexStart);
+
+        // 最大偏差率が小さい方を選ぶ
+        let xDeviationFromMax_ = this.xCol_.stat.deviationFromMax / (this.xCol_.stat.max - this.xCol_.stat.min);
+        let yDeviationFromMax_ = this.yCol_.stat.deviationFromMax / (this.yCol_.stat.max - this.yCol_.stat.min);
+        return xDeviationFromMax_ > yDeviationFromMax_ ? yIndexStart : xIndexStart;
     }
 
     getEndIdx(xEnd: number, yEnd: number): number {
         let xIndexEnd = Math.min(this.lowerBound_(this.xCol_, xEnd), this.numRows_);
         let yIndexEnd = Math.min(this.lowerBound_(this.yCol_, yEnd), this.numRows_);
-        return Math.max(xIndexEnd, yIndexEnd);
+        // 最大偏差率が小さい方を選ぶ
+        let xDeviationFromMax_ = this.xCol_.stat.deviationFromMax / (this.xCol_.stat.max - this.xCol_.stat.min);
+        let yDeviationFromMax_ = this.yCol_.stat.deviationFromMax / (this.yCol_.stat.max - this.yCol_.stat.min);
+        return xDeviationFromMax_ > yDeviationFromMax_ ? yIndexEnd : xIndexEnd;
     }
 
     getMaxX(): number { return this.xCol_.stat.max; }

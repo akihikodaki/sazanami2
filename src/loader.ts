@@ -8,6 +8,7 @@ enum ColumnType { INTEGER, HEX, STRING_CODE, RAW_STRING};
 class ColumnStats {
     min: number = Infinity;
     max: number = -Infinity;
+    deviationFromMax = 0;   // その時の最大値との偏差
 }
 
 // 動的に拡張可能なバッファ
@@ -284,6 +285,12 @@ class Loader {
 
         // stats更新
         const stat = col.stat;
+
+        // その時の最大値からどのぐらい下がったか
+        const dev = stat.max - num;
+        if (stat.deviationFromMax < dev) {
+            stat.deviationFromMax = dev;
+        }
         if (num < stat.min) stat.min = num;
         if (num > stat.max) stat.max = num;
     }
@@ -369,4 +376,4 @@ class Loader {
     }
 }
 
-export { Loader, ColumnType, ColumnBuffer, DataView };
+export { Loader, ColumnType, ColumnBuffer, DataView, ColumnStats };
