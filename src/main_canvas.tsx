@@ -324,16 +324,16 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
             const zoomY = renderCtx.height / 2;
 
             if (e.ctrlKey) {
-                // ズーム系はここで既定動作を先に抑止（ページスクロール等の割り込み防止）
-                e.preventDefault();
 
                 if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+                    e.preventDefault();
                     // Ctrl + ArrowLeft/Right → zoomHorizontal
                     const zoomIn = e.key === "ArrowRight"; // →でズームイン
                     animateZoomByTime(ZOOM_DURATION_MS, ZOOM_DIVISIONS_KEY, (divs) => {
                         renderer.zoomHorizontal(renderCtx, zoomX, zoomY, zoomIn, divs);
                     });
                 } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+                    e.preventDefault();
                     // Ctrl + ArrowUp/Down → zoomUniform
                     const zoomIn = e.key === "ArrowUp"; // ↑でズームイン
                     animateZoomByTime(ZOOM_DURATION_MS, ZOOM_DIVISIONS_KEY, (divs) => {
@@ -350,32 +350,26 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
             switch (e.key) {
                 case "ArrowLeft":
                     // 左へパン（Xマイナス方向）
-                    e.preventDefault();                 // 既定動作を先に抑止
                     animatePanByTime(PAN_DURATION_MS, -PAN_STEP, 0);
                     break;
                 case "ArrowRight":
                     // 右へパン（Xプラス方向）
-                    e.preventDefault();
                     animatePanByTime(PAN_DURATION_MS, PAN_STEP, 0);
                     break;
                 case "ArrowUp":
                     // 上へパン（Yマイナス方向）
-                    e.preventDefault();
                     animatePanByTime(PAN_DURATION_MS, 0, -PAN_STEP);
                     break;
                 case "ArrowDown":
                     // 下へパン（Yプラス方向）
-                    e.preventDefault();
                     animatePanByTime(PAN_DURATION_MS, 0, PAN_STEP);
                     break;
                 case "PageUp":
                     // 大きく上へパン
-                    e.preventDefault();
                     animatePanByTime(PAN_DURATION_MS, 0, -PAGE_STEP);
                     break;
                 case "PageDown":
                     // 大きく下へパン
-                    e.preventDefault();
                     animatePanByTime(PAN_DURATION_MS, 0, PAGE_STEP);
                     break;
             }
