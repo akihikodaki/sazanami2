@@ -161,7 +161,7 @@ class CanvasRenderer {
 
         // drawnIndex を gridCols × gridRows で初期化
         if (renderCtx.drawnIndex?.length != gridCols * gridRows) {
-        renderCtx.drawnIndex = new Int32Array(gridCols * gridRows).fill(-1);
+            renderCtx.drawnIndex = new Int32Array(gridCols * gridRows).fill(-1);
         }
         else {
             renderCtx.drawnIndex.fill(-1);

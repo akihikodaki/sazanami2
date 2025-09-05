@@ -450,6 +450,7 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
             handleResize();
             const canvasCtx = canvas.getContext("2d")!;
             renderer.clear(canvasCtx, renderCtx);
+            renderCtx.drawnIndex = null;    // ここでクリアしておかないと，描画前にマウスオーバーで参照されてしまう
         };
         const onFileFormatDetected = () => {
             // 初回表示で範囲外だったらリセット
