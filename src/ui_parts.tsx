@@ -55,7 +55,7 @@ const ToolBar = (props: {store: Store;}) => {
             <Navbar.Toggle aria-controls="responsive-navbar-nav" />
             <Navbar.Collapse id="responsive-navbar-nav">
             <Nav onSelect={dispatch} activeKey={selectedKey}>
-                <NavDropdown menuVariant="dark" title={<BsList size={20}/>} id="collapsible-nav-dropdown">
+                <NavDropdown menuVariant="dark" title={<BsList size={16}/>} id="collapsible-nav-dropdown">
                     <NavDropdown.Item eventKey="menu_load">
                         Load file
                     </NavDropdown.Item>
@@ -76,7 +76,7 @@ const ToolBar = (props: {store: Store;}) => {
             >
                 {
                 <Nav.Link className="nav-link tool-bar-link" eventKey="menu_fit">
-                    <BsArrowsFullscreen size={18} /> Fit
+                    <BsArrowsFullscreen size={14} /> Fit
                 </Nav.Link>
                 /* 
                 <Nav.Link className="nav-link tool-bar-link" eventKey="zoom-in">
@@ -107,12 +107,12 @@ const StatusBar = (props: {store: Store;}) => {
     return (
         // {/* <div style={{ height: "40px", backgroundColor: "#eee", padding: "10px", textAlign: "left", borderTop: "1px solid #ccc" }}>
         //     <span>{statusBarMessage}</span> */}
-        <div style={{ height: "30px", minHeight: "30px", 
+        <div style={{ height: "24px", minHeight: "24px", 
             backgroundColor: "#272a31", 
-            paddingLeft: "10px", 
-            textAlign: "left", borderTop: "0.5px solid #383B41"}}
+            paddingLeft: "8px", 
+            textAlign: "left", borderTop: "0.4px solid #383B41"}}
         >
-            <span style={{ color: "#C9CACB", fontSize: "15px" }}>{statusBarMessage}</span>
+            <span style={{ color: "#C9CACB", fontSize: "12px" }}>{statusBarMessage}</span>
         </div>
     );
 };
@@ -194,7 +194,7 @@ const HelpDialog = (props: { store: Store }) => {
             <Modal.Body>
                 {(() => {
                     const liStyle = { display: "flex", gap: "1rem", marginBottom: "0.5rem" };
-                    const kbdStyle = { minWidth: "160px" };
+                    const kbdStyle = { minWidth: "128px" };
                     return (
                         <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
                             <li style={liStyle}><kbd style={kbdStyle}>shift + mouse wheel</kbd><span>zoom in and out.</span></li>
@@ -222,7 +222,7 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
     leftPanel,
     rightPanel,
     defaultShowSettings = true,
-    defaultRightWidth = 320,
+    defaultRightWidth = 260,
     store
 }) => {
     const containerRef = useRef<HTMLDivElement | null>(null);
@@ -236,8 +236,8 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
             if (!draggingRef.current || !containerRef.current) return;
             const rect = containerRef.current.getBoundingClientRect();
             const xFromRight = rect.right - e.clientX; // distance from cursor to container's right edge
-            const min = 200;
-            const max = Math.max(300, rect.width * 0.7);
+            const min = 160;
+            const max = Math.max(240, rect.width * 0.7);
             const next = Math.min(Math.max(xFromRight, min), max);
             setRightWidth(next);
         };
@@ -304,19 +304,19 @@ const SettingsPanel: React.FC<{ store: Store }> = ({ store }) => {
             {/* Header */}
             <div
                 className="settings-header"
-                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px" }}
+                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 9px" }}
             >
                 <div style={{ fontWeight: 600 }}>Settings</div>
                 <button
                     onClick={() => store.trigger(ACTION.SHOW_SETTINGS, false)}
                     className="settings-close" 
                 >
-                    <BsX size={20} />
+                    <BsX size={16} />
                 </button>
             </div>
 
             {/* Body → ViewDefinitionEditor */}
-            <div className="settings-body" style={{ padding: 12, overflow: "auto" }}>
+            <div className="settings-body" style={{ padding: 9, overflow: "auto" }}>
                 <ViewDefinitionEditor store={store} />
             </div>
         </div>

@@ -20,7 +20,7 @@ import {
 
 
 // Axes 上のチップ幅に合わせるため、Columns 側も同じ固定幅にする
-const CHIP_WIDTH = 220;
+const CHIP_WIDTH = 176;
 
 // ダークUI向けのアクセント色（カテゴリ別）
 const PALETTE = {
@@ -52,23 +52,23 @@ type AxisSlot = {
 // スタイル（ダークUI）
 
 
-const card: React.CSSProperties = { background: "#1f2229", border: "1px solid #383B41", borderRadius: 8, padding: 12 };
-const header: React.CSSProperties = { fontWeight: 600, color: "#C9CACB", marginBottom: 8 };
-const subheader: React.CSSProperties = { color: "#AEB0B3", fontSize: 12 };
-const input: React.CSSProperties = { width: "100%", background: "#242830", color: "#E7E8E9", border: "1px solid #383B41", borderRadius: 6, padding: "6px 8px" };
+const card: React.CSSProperties = { background: "#1f2229", border: "1px solid #383B41", borderRadius: 6, padding: 9 };
+const header: React.CSSProperties = { fontWeight: 600, color: "#C9CACB", marginBottom: 6 };
+const subheader: React.CSSProperties = { color: "#AEB0B3", fontSize: 9 };
+const input: React.CSSProperties = { width: "100%", background: "#242830", color: "#E7E8E9", border: "1px solid #383B41", borderRadius: 4, padding: "4px 6px" };
 const textareaMono: React.CSSProperties = { ...input, fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" };
-const btnBase: React.CSSProperties = { borderRadius: 6, padding: "6px 10px", cursor: "pointer", border: "1px solid #41454f" };
+const btnBase: React.CSSProperties = { borderRadius: 4, padding: "4px 8px", cursor: "pointer", border: "1px solid #41454f" };
 const smallBtn: React.CSSProperties = { ...btnBase, background: "#2a2e36", color: "#C9CACB" };
 const primaryBtn: React.CSSProperties = { ...btnBase, background: "#365175", borderColor: "#4a6a97", color: "#e8eef9" };
-const iconBtn: React.CSSProperties = { ...smallBtn, display: "inline-flex", alignItems: "center", gap: 6 };
-const badge: React.CSSProperties = { display: "inline-flex", alignItems: "center", background: "#2d323c", color: "#AEB0B3", border: "1px solid #40444d", fontSize: 11, padding: "2px 6px", borderRadius: 999 };
-const errorText: React.CSSProperties = { color: "#ff7a7a", fontSize: 12, marginTop: 6, whiteSpace: "pre-wrap" };
+const iconBtn: React.CSSProperties = { ...smallBtn, display: "inline-flex", alignItems: "center", gap: 4 };
+const badge: React.CSSProperties = { display: "inline-flex", alignItems: "center", background: "#2d323c", color: "#AEB0B3", border: "1px solid #40444d", fontSize: 8, padding: "1px 4px", borderRadius: 999 };
+const errorText: React.CSSProperties = { color: "#ff7a7a", fontSize: 9, marginTop: 4, whiteSpace: "pre-wrap" };
 
 // Columns のリストは固定幅チップを横方向に折り返すため Flex を使用
 const listWrap: React.CSSProperties = {
     display: "flex",
     flexWrap: "wrap",
-    gap: 8
+    gap: 6
     // justifyContent: "flex-end"
 };
 
@@ -76,12 +76,15 @@ const listWrap: React.CSSProperties = {
 const chipBase: React.CSSProperties = {
     display: "flex",
     alignItems: "center",
-    gap: 8,
+    gap: 4,
     padding: "6px 8px",
-    borderRadius: 8,
+    borderRadius: 6,
     background: "#262c36",
     border: "1px solid #454b57",
-    minWidth: 0
+    minWidth: 0,
+    width: "100%",            // ラッパー幅（CHIP_WIDTH）に合わせる
+    boxSizing: "border-box",   // padding/border を幅に含める
+    minHeight: 34 // ボタン(20) + チップpadding上下(6+6) + 枠の影響を見込む
 };
 
 // 1) 共通のボタン基底（高さ/パディング/整列を完全一致）
@@ -89,14 +92,14 @@ const controlBtnBase: React.CSSProperties = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
+    gap: 4,
     boxSizing: "border-box",
-    height: 36,                // ここで高さを固定（Reset と同じに）
-    padding: "6px 12px",       // パディングも共通化
-    borderRadius: 6,
+    height: 28,
+    padding: "4px 9px",
+    borderRadius: 4,
     border: "1px solid #41454f",
-    fontSize: 14,
-    lineHeight: "20px",
+    fontSize: 11,
+    lineHeight: "16px",
     cursor: "pointer"
 };
 
@@ -224,7 +227,9 @@ const ColumnChip: React.FC<{
             {/* 左端2pxアクセント（カテゴリ色） */}
             <div style={{ width: 2, alignSelf: "stretch", borderRadius: 2, background: accent }} />
             {/* ドラッグハンドル（見た目） */}
-            {draggable && <BsGripVertical aria-hidden size={16} style={{ color: "#8b8e94", flex: "0 0 auto" }} />}
+            {draggable
+                ? <BsGripVertical aria-hidden size={16} style={{ color: "#8b8e94", flex: "0 0 auto" }} />
+                : <div style={{ width: 8, flex: "0 0 auto" }} />  /* スペーサ */}
             {/* 列名 */}
             <div
                 style={{ color: "#E7E8E9", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}
@@ -290,16 +295,16 @@ const AxisCard: React.FC<{
             onDrop={onDrop}
             style={{
                 ...card,
-                padding: 10,
+                padding: 8,
                 borderStyle: "dashed",
                 background: hover ? "#242832" : card.background,
                 borderColor: shineOn ? "#ff7a7a" : hover ? "#4a4f59" : "#383B41",
                 transition: "background 80ms ease, border-color 80ms ease",
-                minHeight: 64,
+                minHeight: 52,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
-                gap: 8
+                gap: 6
             }}
         >
             <div style={{ color: "#C9CACB", fontWeight: 600 }}>{label}</div>
@@ -314,7 +319,7 @@ const AxisCard: React.FC<{
                     />
                 </div>
             ) : (
-                <div style={{ color: "#AEB0B3", fontSize: 13 }}>Drop a column here</div>
+                <div style={{ color: "#AEB0B3", fontSize: 10 }}>Drop a column here</div>
             )}
         </div>
     );
@@ -402,21 +407,21 @@ const EditColumnModal: React.FC<EditModalProps> = ({
                 <Modal.Title>{mode === "create" ? "New derived column" : "Edit derived column"}</Modal.Title>
             </Modal.Header>
             <Modal.Body>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 10 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 8 }}>
                     <div>
-                        <div style={{ ...subheader, marginBottom: 4 }}>Name</div>
+                        <div style={{ ...subheader, marginBottom: 3 }}>Name</div>
                         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="name" style={input} />
                     </div>
                     <div>
-                        <div style={{ ...subheader, marginBottom: 4 }}>Expression</div>
+                        <div style={{ ...subheader, marginBottom: 3 }}>Expression</div>
                         <textarea
                             value={expr}
                             onChange={(e) => setExpr(e.target.value)}
                             placeholder="e.g., cu * 8 + wf"
-                            rows={4}
+                            rows={3}
                             style={textareaMono}
                         />
-                        <div style={{ ...subheader, marginTop: 6 }}>
+                        <div style={{ ...subheader, marginTop: 4 }}>
                             Allowed: digits, whitespace, <code>+ - * / % ( )</code>, and identifiers. Up to 2 variables. Referencing other derived columns is not allowed. <code>__index__</code> is allowed.
                         </div>
                     </div>
@@ -644,7 +649,7 @@ export const ViewDefinitionEditor: React.FC<{ store: Store }> = ({ store }) => {
     ];
 
     return (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ display: "flex", flexDirection: "column", fontSize: "75%", gap: 9 }}>
             {/* Columns（上段） */}
             <div style={card}>
                 <div style={{ ...header, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -654,7 +659,7 @@ export const ViewDefinitionEditor: React.FC<{ store: Store }> = ({ store }) => {
                     </button>
                 </div>
 
-                <div style={{ marginBottom: 8 }}>
+                <div style={{ marginTop: 8, marginBottom: 12 }}>
                     <input
                         placeholder="Search columns..."
                         value={query}
@@ -687,7 +692,7 @@ export const ViewDefinitionEditor: React.FC<{ store: Store }> = ({ store }) => {
             {/* Axes（中段） */}
             <div style={card}>
                 <div style={header}>Axes</div>
-                <div style={{ display: "grid", gap: 10 }}>
+                <div style={{ display: "grid", gap: 8 }}>
                     {axisSlots.map(ax => (
                         <AxisCard
                             key={ax.key}
@@ -707,23 +712,23 @@ export const ViewDefinitionEditor: React.FC<{ store: Store }> = ({ store }) => {
             <div
                 style={{
                     position: "sticky",
-                    bottom: 8,
+                    bottom: 6,
                     zIndex: 1,
                     display: "flex",
                     justifyContent: "flex-end",
-                    gap: 8,
-                    paddingTop: 4
+                    gap: 6,
+                    paddingTop: 3
                 }}
             >
                 <Dropdown align="end">
                     <Dropdown.Toggle as={CustomToggleButton} id="vde-util-menu" />
                     <Dropdown.Menu align="end" variant="dark">
                         <Dropdown.Item onClick={handleExport}>
-                            <BsDownload style={{ marginRight: 6 }} />
+                            <BsDownload style={{ marginRight: 4 }} />
                             Export JSON
                         </Dropdown.Item>
                         <Dropdown.Item onClick={handleImportClick}>
-                            <BsUpload style={{ marginRight: 6 }} />
+                            <BsUpload style={{ marginRight: 4 }} />
                             Import JSON
                         </Dropdown.Item>
                     </Dropdown.Menu>
