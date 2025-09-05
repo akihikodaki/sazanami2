@@ -369,6 +369,9 @@ export class DataView {
     getMaxY(): number { return this.yCol_.stat.max; }
     getMinY(): number { return this.yCol_.stat.min; }
 
+    getMaxState(): number { return this.stateCol_ ? this.stateCol_.stat.max : 0; }
+    getMinState(): number { return this.stateCol_ ? this.stateCol_.stat.min : 0; }
+
     get definition() { return this.def_; }
 }
 

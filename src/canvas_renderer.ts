@@ -178,6 +178,12 @@ class CanvasRenderer {
         // データ描画＆インデックス記録
         this.rectRenderer.beginRawMode(canvas, scaleY);
 
+        let stateWidth = dataView.getMaxState() - dataView.getMinState() + 1;   // +1 しないと 1 の時に同じ色になってしまう
+        if (stateWidth == 0) {
+            stateWidth = 1;
+        }
+        const stateScale = 1024 / stateWidth;
+
         for (let i = startIdx; i < endIdx; i += step) {
             const yVal = dataView.getY(i);
             if (yVal == 0) {
@@ -186,7 +192,7 @@ class CanvasRenderer {
             const xVal = dataView.getX(i);
             const x = this.MARGIN_LEFT_ + xVal * scaleX - offsetX;
             const y = yVal * scaleY - offsetY;
-            const color = (dataView.getState(i) * (1024*135/360)) % 1024 / 1024;
+            const color = (dataView.getState(i) * stateScale) % 1024 / 1024;
             this.rectRenderer.fillRect(x, y, pxW, pxH, color);
 
             // visible 範囲内なら、grid 上のセルに記録

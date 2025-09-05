@@ -314,6 +314,11 @@ class Loader {
         }
         col.buffer[col.length] = code;
         col.length++;
+
+        // stats更新
+        const stat = col.stat;
+        if (code > stat.max) stat.max = code;
+        if (code < stat.min) stat.min = code;
     }
 
     // 文字列列の生データを追加
