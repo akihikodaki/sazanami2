@@ -197,10 +197,12 @@ const HelpDialog = (props: { store: Store }) => {
                     const kbdStyle = { minWidth: "128px" };
                     return (
                         <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-                            <li style={liStyle}><kbd style={kbdStyle}>shift + mouse wheel</kbd><span>zoom in and out.</span></li>
-                            <li style={liStyle}><kbd style={kbdStyle}>ctrl + mouse wheel</kbd><span>zoom horizontal only.</span></li>
-                            <li style={liStyle}><kbd style={kbdStyle}>ctrl + up/down</kbd><span>zoom in and out.</span></li>
-                            <li style={liStyle}><kbd style={kbdStyle}>ctrl + left/right</kbd><span>zoom horizontal only.</span></li>
+                            <li style={liStyle}><kbd style={kbdStyle}>Shift + mouse wheel</kbd><span>Zoom in/out.</span></li>
+                            <li style={liStyle}><kbd style={kbdStyle}>Ctrl/⌘ + mouse wheel</kbd><span>Zoom horizontal only.</span></li>
+                            <li style={liStyle}><kbd style={kbdStyle}>Ctrl/⌘ + up/down</kbd><span>Zoom vertical only.</span></li>
+                            <li style={liStyle}><kbd style={kbdStyle}>Ctrl/⌘ + left/right</kbd><span>Zoom horizontal only.</span></li>
+                            <li style={liStyle}><kbd style={kbdStyle}>Shift + up/down</kbd><span>Zoom in/out.</span></li>
+                            <li style={liStyle}><kbd style={kbdStyle}>Ctrl/⌘ + ('+' / '-')</kbd><span>Zoom in/out.</span></li>
                         </ul>
                     );
                 })()}

@@ -327,25 +327,28 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
             const zoomX = renderCtx.width / 2;
             const zoomY = renderCtx.height / 2;
 
-            if (e.ctrlKey) {
-
-                if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
-                    e.preventDefault();
-                    // Ctrl + ArrowLeft/Right → zoomHorizontal
-                    const zoomIn = e.key === "ArrowRight"; // →でズームイン
-                    animateZoomByTime(ZOOM_DURATION_MS, ZOOM_DIVISIONS_KEY, (divs) => {
-                        renderer.zoomHorizontal(renderCtx, zoomX, zoomY, zoomIn, divs);
-                    });
-                } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
-                    e.preventDefault();
-                    // Ctrl + ArrowUp/Down → zoomUniform
-                    const zoomIn = e.key === "ArrowUp"; // ↑でズームイン
-                    animateZoomByTime(ZOOM_DURATION_MS, ZOOM_DIVISIONS_KEY, (divs) => {
+            const runZoom = (mode: "uniform" | "horizontal" | "vertical", zoomIn: boolean) => {
+                e.preventDefault();
+                animateZoomByTime(ZOOM_DURATION_MS, ZOOM_DIVISIONS_KEY, (divs) => {
+                    if (mode === "uniform") {
                         renderer.zoomUniform(renderCtx, zoomX, zoomY, zoomIn, divs);
-                    });
-                }
-                return;
-            }
+                    } else if (mode === "horizontal") {
+                        renderer.zoomHorizontal(renderCtx, zoomX, zoomY, zoomIn, divs);
+                    } else {
+                        renderer.zoomVertical(renderCtx, zoomX, zoomY, zoomIn, divs);
+                    }
+                });
+            };
+
+            const isAccel = e.ctrlKey || e.metaKey; // Win/Linux: Ctrl, macOS: ⌘
+            const k = e.key;
+            let upOrDown = k === "ArrowUp" || k === "ArrowDown";
+            let leftOrRight = k === "ArrowLeft" || k === "ArrowRight";
+            if (isAccel && leftOrRight)   { runZoom("horizontal", k === "ArrowRight"); return; }  // Accel(⌘/Ctrl) + ←/→ : horizontal
+            if (isAccel && upOrDown)      { runZoom("vertical",   k === "ArrowUp");    return; }  // Accel(⌘/Ctrl) + ↑/↓ : vertical
+            if (e.shiftKey && upOrDown)   { runZoom("uniform",    k === "ArrowUp");    return; }  // Shift + ↑/↓ : uniform
+            if (k === "+" || k === "=")   { runZoom("uniform", true); return; }            // + / - : uniform Shift+= が "+" の配列向け
+            if (k === "-")                { runZoom("uniform", false); return; }
 
             // パン（視点移動）
             const PAN_STEP = 120;   // 矢印キー
