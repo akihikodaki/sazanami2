@@ -158,8 +158,8 @@ class RectRendererWebGL {
     }
 
     // 内部処理
-    private toStyle_(stateVal: number): string {
-        const hue = stateVal * 360;
+    private toStyle_(colorVal: number): string {
+        const hue = colorVal * 360;
         return `hsl(${hue},60%,60%)`;
     }
 
@@ -516,8 +516,8 @@ class RectRendererSoft {
         }
     }
 
-    toStyle_(stateVal: number): string {
-        const hue = stateVal * 360;
+    toStyle_(colorVal: number): string {
+        const hue = colorVal * 360;
         const color = `hsl(${hue},60%,60%)`;
         return color;
     };

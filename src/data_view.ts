@@ -5,7 +5,7 @@ import { Loader, ColumnBuffer } from "./loader";
 type ViewSpec = {
     axisXField: string;
     axisYField: string;
-    stateField?: string | null;
+    colorField?: string | null;
 };
 
 // 行の仕様
@@ -23,7 +23,7 @@ export const isEqualViewDefinition = (a: ViewDefinition, b: ViewDefinition): boo
     if (
         va.axisXField !== vb.axisXField ||
         va.axisYField !== vb.axisYField ||
-        (va.stateField ?? null) !== (vb.stateField ?? null)
+        (va.colorField ?? null) !== (vb.colorField ?? null)
     ) {
         return false;
     }
@@ -276,7 +276,7 @@ export class DataView {
     private numRows_ = 0;
     private xCol_!: NumberColumn;
     private yCol_!: NumberColumn;
-    private stateCol_: NumberColumn | null = null;
+    private colorCol_: NumberColumn | null = null;
 
     // 内部レジストリ（非公開）
     private registry_ = new VirtualColumnRegistry();
@@ -320,7 +320,7 @@ export class DataView {
 
         this.xCol_ = resolveByName(spec.axisXField);
         this.yCol_ = resolveByName(spec.axisYField);
-        this.stateCol_ = spec.stateField ? resolveByName(spec.stateField) : null;
+        this.colorCol_ = spec.colorField ? resolveByName(spec.colorField) : null;
 
         this.def_ = { view: { ...spec }, columns: { ...columns } };
     }
@@ -332,7 +332,7 @@ export class DataView {
 
     getX(i: number): number { return this.xCol_.getNumber(i); }
     getY(i: number): number { return this.yCol_.getNumber(i); }
-    getState(i: number): number { return this.stateCol_ ? this.stateCol_.getNumber(i) : 0; }
+    getColor(i: number): number { return this.colorCol_ ? this.colorCol_.getNumber(i) : 0; }
 
     // 2分探索
     lowerBound_(col: NumberColumn, target: number): number {
@@ -369,8 +369,8 @@ export class DataView {
     getMaxY(): number { return this.yCol_.stat.max; }
     getMinY(): number { return this.yCol_.stat.min; }
 
-    getMaxState(): number { return this.stateCol_ ? this.stateCol_.stat.max : 0; }
-    getMinState(): number { return this.stateCol_ ? this.stateCol_.stat.min : 0; }
+    getMaxColor(): number { return this.colorCol_ ? this.colorCol_.stat.max : 0; }
+    getMinColor(): number { return this.colorCol_ ? this.colorCol_.stat.min : 0; }
 
     get definition() { return this.def_; }
 }
@@ -380,7 +380,7 @@ export const inferViewDefinition = (loader: Loader): ViewDefinition => {
     const h = loader.headers;
     if (h.length === 0) {
         return {
-            view: { axisXField: "__index__", axisYField: "__index__", stateField: null },
+            view: { axisXField: "__index__", axisYField: "__index__", colorField: null },
             columns: {}
         };
     }
@@ -401,7 +401,7 @@ export const inferViewDefinition = (loader: Loader): ViewDefinition => {
         const xExpr = `${cu} * ${wfBase} + ${wf}`;
         const xName = "cu_wf";
         return {
-            view: { axisXField: xName, axisYField: cycle, stateField: state ?? null },
+            view: { axisXField: xName, axisYField: cycle, colorField: state ?? null },
             columns: { [xName]: xExpr }
         };
     }
@@ -414,7 +414,7 @@ export const inferViewDefinition = (loader: Loader): ViewDefinition => {
         const xExpr = `${bank} * 8 + (${tbl} % 8)`;
         const xName = "bank_and_idx";
         return {
-            view: { axisXField: xName, axisYField: "__index__", stateField: actual ?? null },
+            view: { axisXField: xName, axisYField: "__index__", colorField: actual ?? null },
             columns: { [xName]: xExpr }
         };
     }
@@ -424,19 +424,19 @@ export const inferViewDefinition = (loader: Loader): ViewDefinition => {
     if (n === 1) {
         const c0 = h[0];
         return {
-            view: { axisXField: c0, axisYField: "__index__", stateField: null },
+            view: { axisXField: c0, axisYField: "__index__", colorField: null },
             columns: {}
         };
     } else if (n === 2) {
         const c0 = h[0], c1 = h[1];
         return {
-            view: { axisXField: c1, axisYField: c0, stateField: null },
+            view: { axisXField: c1, axisYField: c0, colorField: null },
             columns: {}
         };
     } else {
         const c0 = h[0], c1 = h[1], c2 = h[2];
         return {
-            view: { axisXField: c1, axisYField: c0, stateField: c2 },
+            view: { axisXField: c1, axisYField: c0, colorField: c2 },
             columns: {}
         };
     }

@@ -43,7 +43,7 @@ type PaletteItem = {
 
 // Axis スロット（将来的に増やす前提で配列化）
 type AxisSlot = {
-    key: "axisXField" | "axisYField" | "stateField" | string;
+    key: "axisXField" | "axisYField" | "colorField" | string;
     label: string;
     acceptNumeric: boolean; // 数値のみ受け入れ
 };
@@ -512,7 +512,7 @@ export const ViewDefinitionEditor: React.FC<{ store: Store }> = ({ store }) => {
         if (light.length > 0) { setModalErrors(light); return; }
 
         const next: ViewDefinition = {
-            view: { ...(current?.view ?? { axisXField: "__index__", axisYField: "__index__", stateField: null }) },
+            view: { ...(current?.view ?? { axisXField: "__index__", axisYField: "__index__", colorField: null }) },
             columns: { ...(current?.columns ?? {}), [name.trim()]: expr.trim() }
         };
         const result = strictApply(store, next);
@@ -535,7 +535,7 @@ export const ViewDefinitionEditor: React.FC<{ store: Store }> = ({ store }) => {
         const v = { ...current.view };
         if (v.axisXField === editTargetName) v.axisXField = name.trim();
         if (v.axisYField === editTargetName) v.axisYField = name.trim();
-        if (v.stateField === editTargetName) v.stateField = name.trim();
+        if (v.colorField === editTargetName) v.colorField = name.trim();
 
         const next: ViewDefinition = { view: v, columns: nextCols };
         const result = strictApply(store, next);
@@ -547,7 +547,7 @@ export const ViewDefinitionEditor: React.FC<{ store: Store }> = ({ store }) => {
     // DnD で Axis をセット — 即時反映
     const trySetAxis = (key: AxisSlot["key"], name: string) => {
         const base: ViewDefinition = current ?? {
-            view: { axisXField: "__index__", axisYField: "__index__", stateField: null },
+            view: { axisXField: "__index__", axisYField: "__index__", colorField: null },
             columns: {}
         };
         const next: ViewDefinition = { view: { ...base.view, [key]: name } as any, columns: { ...base.columns } };
@@ -576,7 +576,7 @@ export const ViewDefinitionEditor: React.FC<{ store: Store }> = ({ store }) => {
     // 派生列の削除（割当中なら解除して即時反映）
     const deleteDerived = (name: string) => {
         if (!current) return;
-        const assigned = [current.view.axisXField, current.view.axisYField, current.view.stateField].includes(name);
+        const assigned = [current.view.axisXField, current.view.axisYField, current.view.colorField].includes(name);
         if (assigned) {
             if (!confirm("This column is assigned to an axis. Remove anyway?")) return;
         }
@@ -585,7 +585,7 @@ export const ViewDefinitionEditor: React.FC<{ store: Store }> = ({ store }) => {
         const v = { ...current.view };
         if (v.axisXField === name) v.axisXField = null as any;
         if (v.axisYField === name) v.axisYField = null as any;
-        if (v.stateField === name) v.stateField = null as any;
+        if (v.colorField === name) v.colorField = null as any;
         const next: ViewDefinition = { view: v, columns: nextCols };
         const result = strictApply(store, next);
         if (!result.ok) {
@@ -611,7 +611,7 @@ export const ViewDefinitionEditor: React.FC<{ store: Store }> = ({ store }) => {
     const [importKey, setImportKey] = useState(0);
     const handleExport = () => {
         const def = store.viewDef ?? current ?? {
-            view: { axisXField: "__index__", axisYField: "__index__", stateField: null },
+            view: { axisXField: "__index__", axisYField: "__index__", colorField: null },
             columns: {}
         };
         const blob = new Blob([JSON.stringify(def, null, 2)], { type: "application/json" });
@@ -645,7 +645,7 @@ export const ViewDefinitionEditor: React.FC<{ store: Store }> = ({ store }) => {
     const axisSlots: AxisSlot[] = [
         { key: "axisXField", label: "X", acceptNumeric: true },
         { key: "axisYField", label: "Y", acceptNumeric: true },
-        { key: "stateField", label: "Color", acceptNumeric: true },
+        { key: "colorField", label: "Color", acceptNumeric: true },
     ];
 
     return (
