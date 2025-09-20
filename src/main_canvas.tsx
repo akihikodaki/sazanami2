@@ -277,8 +277,12 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
             const dpr = window.devicePixelRatio || 1;
             const width = div.clientWidth;
             const height = div.clientHeight;
-            canvas.width = width * dpr;
-            canvas.height = height * dpr;
+            const targetW = Math.max(0, Math.floor(width * dpr));
+            const targetH = Math.max(0, Math.floor(height * dpr));
+            // 変更があるときだけ更新（不要な再確保を避ける）
+            if (canvas.width !== targetW) canvas.width = targetW;
+            if (canvas.height !== targetH) canvas.height = targetH;
+
             const canvasCtx = canvas.getContext("2d")!;
 
             canvasCtx.resetTransform?.();
@@ -422,7 +426,9 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
             canvas.style.cursor = "default";
         };
 
-        window.addEventListener("resize", handleResize);
+        const ro = new ResizeObserver(handleResize);
+        ro.observe(div);
+
         div.addEventListener("wheel", handleWheel, { passive: false });
         window.addEventListener("keydown", handleKeyDown);
         canvas.addEventListener("mousedown", handleMouseDown);
@@ -478,7 +484,6 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
         return () => {
             cancelZoomAnimation();
             cancelPanAnimation();
-            window.removeEventListener("resize", handleResize);
             div.removeEventListener("wheel", handleWheel);
             window.removeEventListener("keydown", handleKeyDown);
             canvas.removeEventListener("mousedown", handleMouseDown);
