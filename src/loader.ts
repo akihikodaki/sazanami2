@@ -118,7 +118,7 @@ class Loader {
 
     load(
         file: File,
-        finishCallback: () => void,
+        finishCallback: (lines: number, elapsedMs: number) => void,
         formatDetected: () => void,
         progressCallback: (progress: number, lineNum: number) => void,
         errorCallback: (error: any, lineNum: number) => void
@@ -144,8 +144,7 @@ class Loader {
                 }
                 this.dataViewInvalidated_ = true;   // max を更新した可能性があるので invalidate
                 let elapsed = ((new Date()).getTime() - this.startTime_);
-                console.log(`Loaded ${this.lineNum - 1} lines in ${elapsed} ms`);
-                finishCallback();
+                finishCallback(this.lineNum - 1, elapsed);
             },
             (error: any) => {   // onError
                 errorCallback(error, this.lineNum);

@@ -63,7 +63,7 @@ class Store {
 
             this.loader.load(
                 file,
-                () => {
+                (lines: number, elapsedMs: number) => {
                     // ロード完了
                     this.trigger(CHANGE.FILE_LOADING_END);
                     this.trigger(CHANGE.FILE_LOADED);
@@ -72,7 +72,7 @@ class Store {
                     this.trigger(CHANGE.HEADERS_CHANGED, this.loader.headers);
 
                     // メッセージ
-                    this.trigger(CHANGE.SHOW_MESSAGE_IN_STATUS_BAR, "File loaded successfully");
+                    this.trigger(CHANGE.SHOW_MESSAGE_IN_STATUS_BAR, `File loaded successfully: ${lines} lines in ${elapsedMs} ms`);
 
                     // キャンバス再描画など
                     this.trigger(CHANGE.CONTENT_UPDATED);
