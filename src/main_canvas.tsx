@@ -1,7 +1,6 @@
 import React, { useRef, useEffect, createContext, useContext } from "react";
 import Store, { ACTION, CHANGE } from "./store";
 import { CanvasRenderer, RendererContext } from "./canvas_renderer";
-import { inferViewDefinition } from "./data_view";
 
 const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
     const rendererRef = useRef<CanvasRenderer>(new CanvasRenderer());
@@ -463,6 +462,10 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
             // if (renderCtx.offsetY > renderCtx.dataView.getMaxY()) {
             //     renderCtx.offsetY = renderCtx.dataView.getMaxY() - renderCtx.height;
             // }
+            if (!store.viewDef) {
+                console.log("No view definition after format detected");
+                return;
+            }
             renderCtx.dataView = store.loader.GetDataView(store.viewDef);
             renderer.fitScaleToData(renderCtx, 1.0);
         };

@@ -6,6 +6,7 @@ type ViewSpec = {
     axisXField: string;
     axisYField: string;
     colorField?: string | null;
+    colorMap?: string;
 };
 
 // 行の仕様
@@ -377,6 +378,10 @@ export class DataView {
 
 // 必要に応じて仮想列と列の仕様を返す
 export const inferViewDefinition = (loader: Loader): ViewDefinition => {
+    if (loader.detectionDone === false) {
+        throw new Error("Type detection not done yet");
+    }
+
     const h = loader.headers;
     if (h.length === 0) {
         return {

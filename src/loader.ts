@@ -366,12 +366,10 @@ class Loader {
         return this.lineNum - 1;
     }
 
-    public GetDataView(dataViewDef: ViewDefinition|null = null): DataView {
+    public GetDataView(dataViewDef: ViewDefinition): DataView {
         if (!this.dataView_ || this.dataViewInvalidated_  || 
             (dataViewDef && !isEqualViewDefinition(dataViewDef, this.dataView_.definition))
         ) {
-            if (!dataViewDef)
-                dataViewDef = inferViewDefinition(this);
             this.dataView_ = new DataView();
             this.dataView_.init(this, dataViewDef);
             this.dataViewInvalidated_ = false;
