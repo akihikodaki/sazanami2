@@ -148,29 +148,26 @@ class RectRendererWebGL {
         // CSS→DOM 変換とクランプ（元ロジックと統一）
         const sx = this.imageWidthScale_;
         const sy = this.imageHeightScale_;
-        const wCSS = this.imageWidthCSS_;
-        const hCSS = this.imageHeightCSS_;
         const wDOM = this.imageWidthDOM_;
         const hDOM = this.imageHeightDOM_;
 
         let left   = cssLeft * sx;
         let top    = cssTop * sy;
-        let right  = Math.min(cssLeft + cssWidth,  wCSS) * sx;
-        let bottom = Math.min(cssTop  + cssHeight, hCSS) * sy;
+        let right  = (cssLeft + cssWidth) * sx;
+        let bottom = (cssTop  + cssHeight) * sy;
 
         left   = Math.max(0, left);
         top    = Math.max(0, top);
         right  = Math.max(left,  Math.min(right,  wDOM));
         bottom = Math.max(top,   Math.min(bottom, hDOM));
 
-        const x0 = Math.floor(left + 0.5);
-        const y0 = Math.floor(top  + 0.5);
-        const x1 = Math.floor(right  - 0.5);
-        const y1 = Math.floor(bottom - 0.5);
-        if (x1 < x0 || y1 < y0) return;
+        const x0 = left;
+        const y0 = top;
+        const x1 = right;
+        const y1 = bottom;
 
-        const w = (x1 - x0 + 1);
-        const h = (y1 - y0 + 1);
+        let w = Math.max(x1 - x0, 0.5);
+        let h = Math.max(y1 - y0, 0.5);
 
         if (this.count_ >= this.cap_) this.grow_();
         const i2 = this.count_ * 2;
