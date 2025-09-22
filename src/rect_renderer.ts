@@ -165,6 +165,7 @@ class RectRendererWebGL {
         const y0 = top;
         const x1 = right;
         const y1 = bottom;
+        if (x1 <= x0 || y1 <= y0) return;
 
         let w = Math.max(x1 - x0, 0.5);
         let h = Math.max(y1 - y0, 0.5);
@@ -187,7 +188,7 @@ class RectRendererWebGL {
     }
 
     private grow_(): void {
-        const newCap = Math.max(2048, this.cap_ * 2 || 0);
+        const newCap = Math.max(2048, this.cap_ * 2);  // 最低 2048 から
         const pos = new Float32Array(newCap * 2);
         const siz = new Float32Array(newCap * 2);
         const col = new Uint8Array(newCap * 4);
