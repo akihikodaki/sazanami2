@@ -1,5 +1,6 @@
 // data_view.ts
 import { Loader, ColumnBuffer } from "./loader";
+import { buildPaletteByName, inferColorMapName } from "./color_map";
 
 // 軸と色の仕様
 type ViewSpec = {
@@ -24,7 +25,8 @@ export const isEqualViewDefinition = (a: ViewDefinition, b: ViewDefinition): boo
     if (
         va.axisXField !== vb.axisXField ||
         va.axisYField !== vb.axisYField ||
-        (va.colorField ?? null) !== (vb.colorField ?? null)
+        (va.colorField ?? null) !== (vb.colorField ?? null) || 
+        (va.colorMap ?? null) !== (vb.colorMap ?? null)
     ) {
         return false;
     }
@@ -271,6 +273,7 @@ class VirtualColumnRegistry {
     }
 }
 
+
 // 公開 DataView
 export class DataView {
     private def_!: ViewDefinition;
@@ -279,8 +282,13 @@ export class DataView {
     private yCol_!: NumberColumn;
     private colorCol_: NumberColumn | null = null;
 
-    // 内部レジストリ（非公開）
+    // 内部レジストリ
     private registry_ = new VirtualColumnRegistry();
+
+    // パレット管理
+    private paletteName_: string | undefined;
+    private paletteSize_ = 1024;
+    private palettePacked_: Uint32Array = new Uint32Array(0);
 
     // ColumnSpec が loader に対して追加可能かどうかを事前検証する。
     // エラーがある場合は ok:false とエラーメッセージ配列を返す。
@@ -323,6 +331,14 @@ export class DataView {
         this.yCol_ = resolveByName(spec.axisYField);
         this.colorCol_ = spec.colorField ? resolveByName(spec.colorField) : null;
 
+        // パレット初期化
+        let colorMap = spec.colorMap;
+        if (!colorMap || colorMap.trim() === "") {
+            colorMap = inferColorMapName(loader, spec.colorField);
+        }
+        this.paletteName_ = colorMap;
+        this.palettePacked_ = buildPaletteByName(this.paletteName_, this.paletteSize_);
+
         this.def_ = { view: { ...spec }, columns: { ...columns } };
     }
 
@@ -333,7 +349,24 @@ export class DataView {
 
     getX(i: number): number { return this.xCol_.getNumber(i); }
     getY(i: number): number { return this.yCol_.getNumber(i); }
-    getColor(i: number): number { return this.colorCol_ ? this.colorCol_.getNumber(i) : 0; }
+
+    // カラーインデックスの取得
+    // 既定ポリシー：パレットサイズ 256、colorField の値を整数に丸めた上で mod を取る
+    // 負の値は正に変換する
+    getColorIndex(i: number): number {
+        if (!this.colorCol_) return 0;
+        const v = this.colorCol_.getNumber(i);
+        if (!Number.isFinite(v)) return 0;
+        const n = Math.trunc(v);
+        const m = this.paletteSize_;
+        const idx = n % m;
+        return idx < 0 ? idx + m : idx;
+    }
+
+    // パレット（uint32 RGBA packed）の取得 ----
+    getPalette(): Uint32Array {
+        return this.palettePacked_;
+    }
 
     // 2分探索
     lowerBound_(col: NumberColumn, target: number): number {
@@ -377,6 +410,7 @@ export class DataView {
 }
 
 // 必要に応じて仮想列と列の仕様を返す
+
 export const inferViewDefinition = (loader: Loader): ViewDefinition => {
     if (loader.detectionDone === false) {
         throw new Error("Type detection not done yet");
@@ -385,7 +419,7 @@ export const inferViewDefinition = (loader: Loader): ViewDefinition => {
     const h = loader.headers;
     if (h.length === 0) {
         return {
-            view: { axisXField: "__index__", axisYField: "__index__", colorField: null },
+            view: { axisXField: "__index__", axisYField: "__index__", colorField: null, colorMap: undefined },
             columns: {}
         };
     }
@@ -405,8 +439,9 @@ export const inferViewDefinition = (loader: Loader): ViewDefinition => {
         const wfBase = base(wf);
         const xExpr = `${cu} * ${wfBase} + ${wf}`;
         const xName = "cu_wf";
+        const colorMap = inferColorMapName(loader, state);
         return {
-            view: { axisXField: xName, axisYField: cycle, colorField: state ?? null },
+            view: { axisXField: xName, axisYField: cycle, colorField: state ?? null, colorMap },
             columns: { [xName]: xExpr }
         };
     }
@@ -418,8 +453,9 @@ export const inferViewDefinition = (loader: Loader): ViewDefinition => {
         const actual = findHeader(h, "Actual");
         const xExpr = `${bank} * 8 + (${tbl} % 8)`;
         const xName = "bank_and_idx";
+        const colorMap = inferColorMapName(loader, actual);
         return {
-            view: { axisXField: xName, axisYField: "__index__", colorField: actual ?? null },
+            view: { axisXField: xName, axisYField: "__index__", colorField: actual ?? null, colorMap },
             columns: { [xName]: xExpr }
         };
     }
@@ -429,19 +465,20 @@ export const inferViewDefinition = (loader: Loader): ViewDefinition => {
     if (n === 1) {
         const c0 = h[0];
         return {
-            view: { axisXField: c0, axisYField: "__index__", colorField: null },
+            view: { axisXField: c0, axisYField: "__index__", colorField: null, colorMap: undefined },
             columns: {}
         };
     } else if (n === 2) {
         const c0 = h[0], c1 = h[1];
         return {
-            view: { axisXField: c1, axisYField: c0, colorField: null },
+            view: { axisXField: c1, axisYField: c0, colorField: null, colorMap: undefined },
             columns: {}
         };
     } else {
         const c0 = h[0], c1 = h[1], c2 = h[2];
+        const colorMap = inferColorMapName(loader, c2);
         return {
-            view: { axisXField: c1, axisYField: c0, colorField: c2 },
+            view: { axisXField: c1, axisYField: c0, colorField: c2, colorMap },
             columns: {}
         };
     }

@@ -443,6 +443,7 @@ const EditColumnModal: React.FC<EditModalProps> = ({
 const strictApply = (store: Store, testDef: ViewDefinition): { ok: boolean; errors: string[] } => {
     try {
         const dv = new DataView();
+        testDef.view.colorMap = ""; // ここでは空にしておく（DataView 側で自動推定される）
         const v = dv.validateColumnSpec(store.loader, testDef.columns ?? {});
         if (!v.ok) return { ok: false, errors: v.errors };
         dv.init(store.loader, testDef);

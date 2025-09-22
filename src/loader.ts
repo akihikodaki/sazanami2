@@ -201,7 +201,6 @@ class Loader {
                 });
                 if (this.detectionCount_ === Loader.TYPE_DETECT_COUNT) {
                     this.finalizeTypes_();
-                    this.detectionDone_ = true;
                 }
             } else {
                 values.forEach((raw, index) => {
@@ -247,7 +246,7 @@ class Loader {
             });
             delete this.rawBuffer_[header];
         });
-
+        this.detectionDone_ = true;
         this.onFormatDetected_?.();
     }
 

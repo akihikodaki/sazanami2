@@ -44,12 +44,7 @@ class RectRendererWebGL {
     private size_: Float32Array = new Float32Array(0);
     private color_: Uint8Array = new Uint8Array(0); // RGBA（各 0..255）
 
-    // hue(0..255) -> RGBA(32bit) キャッシュ（-1 は未計算）
-    private rgbCache_: Int32Array = new Int32Array(256);
-
     constructor() {
-        // キャッシュは -1 で初期化
-        this.rgbCache_.fill(-1);
     }
 
     init() {
@@ -134,57 +129,19 @@ class RectRendererWebGL {
     }
 
     // 多数呼ばれる：raw 中は GPU バッチに積む。非 raw は 2D 即時描画。
-    fillRect(cssLeft: number, cssTop: number, cssWidth: number, cssHeight: number, hue: number): void {
+    fillRect(cssLeft: number, cssTop: number, cssWidth: number, cssHeight: number, packed: number): void {
         if (this.rawMode_) {
-            // hue(0..1) -> 0..255 に量子化し、キャッシュ参照
-            const ih = Math.max(0, Math.min(255, Math.floor(hue * 255)));
-            let packed = this.rgbCache_[ih];
-            if (packed === -1) {
-                const rgba = this.hslToRGBA8_(ih / 255);
-                // packed を RGBA の順で 8bit 連結（R<<24|G<<16|B<<8|A）
-                packed = ((rgba[0] & 255) << 24) | ((rgba[1] & 255) << 16) | ((rgba[2] & 255) << 8) | (rgba[3] & 255);
-                this.rgbCache_[ih] = packed;
-            }
             this.queueRectPacked_(cssLeft, cssTop, cssWidth, cssHeight, packed);
             return;
         }
         // 非 raw は 2D で即時
-        if (this.fillHuePrev !== hue) {
-            this.fillHuePrev = hue;
-            this.fillStylePrev = "";
-            this.ctx2d_!.fillStyle = this.toStyle_(hue);
-        }
+        this.ctx2d_!.fillStyle = this.toStyle_(packed);
         this.ctx2d_!.fillRect(cssLeft, cssTop, cssWidth, cssHeight);
     }
 
     // 内部処理
     private toStyle_(colorVal: number): string {
-        const hue = colorVal * 360;
-        return `hsl(${hue},60%,60%)`;
-    }
-
-    private hslToRGBA8_(h: number): [number, number, number, number] {
-        // s=0.6, l=0.6 固定（元コードと同一）。戻りは RGBA（0..255）
-        const s:number = 0.6, l:number = 0.6;
-        let r: number, g: number, b: number;
-        if (s == 0) {
-            r = g = b = l;
-        } else {
-            const q = (l < 0.5) ? (l * (1 + s)) : (l + s - l * s);
-            const p = 2 * l - q;
-            const hue2rgb = (p: number, q: number, t: number) => {
-                if (t < 0) t += 1;
-                if (t > 1) t -= 1;
-                if (t < 1/6) return p + (q - p) * 6 * t;
-                if (t < 1/2) return q;
-                if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
-                return p;
-            };
-            r = hue2rgb(p, q, h + 1/3);
-            g = hue2rgb(p, q, h);
-            b = hue2rgb(p, q, h - 1/3);
-        }
-        return [Math.floor(r*255), Math.floor(g*255), Math.floor(b*255), 255];
+        return `rgba(${(colorVal >>> 24) & 255}, ${(colorVal >>> 16) & 255}, ${(colorVal >>> 8) & 255}, ${(colorVal & 255) / 255})`;
     }
 
     private queueRectPacked_(cssLeft: number, cssTop: number, cssWidth: number, cssHeight: number, packedRGBA: number): void {
@@ -376,15 +333,12 @@ class RectRendererSoft {
 
     private fillHuePrev_: number = -1;
     private fillStylePrev_: string = "";
-    private rgbCache_ = new Int32Array(256);    // 0-255 に整数化した hue 値から RGBA 値をキャッシュ
 
     // オーバーレイ（raw描画）用のオフスクリーンキャンバス
     private overlayCanvas_: HTMLCanvasElement | null = null;
     private overlayCtx_: CanvasRenderingContext2D | null = null;
 
     constructor() {
-        // rgbCache を -1 で初期化
-        this.rgbCache_.fill(-1);
         this.ctx_ = null;
         this.overlayCanvas_ = null;
         this.overlayCtx_ = null;
@@ -510,65 +464,30 @@ class RectRendererSoft {
             let p = rowStart + x0;
             const pEnd = rowStart + x1;
             for (; p <= pEnd; p++) {
-                imageData[p] = rgb; // α を含む RGBA 値（下記メモ参照）
+                imageData[p] =
+                    ((rgb & 0x000000ff) << 24) |  // A -> 上位バイト
+                    ((rgb & 0x0000ff00) << 8)  |  // B -> 次バイト
+                    ((rgb & 0x00ff0000) >>> 8) |  // G -> 次バイト（符号なし右シフト）
+                    ((rgb & 0xff000000) >>> 24);  // R -> 下位バイト
             }
             rowStart += wDOM;
         }
     }
 
     toStyle_(colorVal: number): string {
-        const hue = colorVal * 360;
-        const color = `hsl(${hue},60%,60%)`;
-        return color;
+        return `rgba(${(colorVal >>> 24) & 255}, ${(colorVal >>> 16) & 255}, ${(colorVal >>> 8) & 255}, ${(colorVal & 255) / 255})`;
     };
 
-    hsl2rgb(h: number){
-        let s = 0.6, l = 0.6;
-        let r, g, b;
-    
-        if(s == 0){
-            r = g = b = l;
-        }else{
-            let hue2rgb = (p:number, q:number, t:number) => {
-                if(t < 0) t += 1;
-                if(t > 1) t -= 1;
-                if(t < 1/6) return p + (q - p) * 6 * t;
-                if(t < 1/2) return q;
-                if(t < 2/3) return p + (q - p) * (2/3 - t) * 6;
-                return p;
-            };
-    
-            let q = (l < 0.5) ? 
-                (l * (1 + s)) : (l+s - l*s);
-            let p = 2*l - q;
-            r = hue2rgb(p, q, h + 1/3);
-            g = hue2rgb(p, q, h);
-            b = hue2rgb(p, q, h - 1/3);
-        }
-
-        return 0xff000000 | (Math.floor(b*255)<<16) | (Math.floor(g*255)<<8) | Math.floor(r*255);
-    }
-
-    fillRect(cssLeft: number, cssTop: number, cssWidth: number, cssHeight: number, hue: number): void {
+    fillRect(cssLeft: number, cssTop: number, cssWidth: number, cssHeight: number, packed: number): void {
         if (!this.ctx_)
             return;
 
         if (this.imageDataUint32Ptr_)  {
-            let intHue = Math.floor(hue * 255);
-            let rgb = this.rgbCache_[intHue];
-            if (rgb == -1) {
-                rgb = this.hsl2rgb(hue);
-                this.rgbCache_[intHue] = rgb;
-            }
-            this.fillRectRaw_(cssLeft, cssTop, cssWidth, cssHeight, rgb);
+            this.fillRectRaw_(cssLeft, cssTop, cssWidth, cssHeight, packed);
         }
         else {
-            if (this.fillHuePrev_ !== hue) {
-                this.fillHuePrev_ = hue;
-                this.fillStylePrev_ = "";
-                let style = this.toStyle_(hue);
-                this.ctx_.fillStyle = style;
-            }
+            let style = this.toStyle_(packed);
+            this.ctx_.fillStyle = style;
             this.ctx_.fillRect(cssLeft, cssTop, cssWidth, cssHeight);
         }
     }

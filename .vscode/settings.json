@@ -1,11 +1,14 @@
 {
     "cSpell.words": [
         "fzstd",
+        "glasbey",
+        "okabe",
         "ondata",
         "Ryota",
         "Sazanami",
         "Shioya",
-        "TAGE"
+        "TAGE",
+        "viridis"
     ],
     "makefile.configureOnOpen": false
 }
