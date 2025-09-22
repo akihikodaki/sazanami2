@@ -5,7 +5,7 @@ import { Loader, ColumnBuffer } from "./loader";
 const clamp01 = (x: number) => x < 0 ? 0 : (x > 1 ? 1 : x);
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const packRGBA = (r: number, g: number, b: number, a: number = 255): number =>
-    ((r & 0xff) << 24) | ((g & 0xff) << 16) | ((b & 0xff) << 8) | (a & 0xff);
+    ((a & 0xff) << 24) | ((b & 0xff) << 16) | ((g & 0xff) << 8) | (r & 0xff);
 
 const hexToRGB = (hex: string): [number, number, number] => {
     const s = hex.replace("#", "");
@@ -161,7 +161,7 @@ const postAdjustForDarkBG = (
     const [br, bg, bb] = hexToRGB(bgHex);
     for (let i = 0; i < pal.length; i++) {
         const p = pal[i];
-        const r = (p >> 24) & 255, g = (p >> 16) & 255, b = (p >> 8) & 255;
+        const r =  p & 255, g = (p >> 8)  & 255, b = (p >> 16) & 255;
         const [R, G, B] = adjust([r, g, b], [br, bg, bb], cr, maxL);
         pal[i] = packRGBA(R, G, B, 255);
     }

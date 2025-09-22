@@ -42,7 +42,7 @@ class RectRendererWebGL {
     private count_: number = 0;
     private pos_: Float32Array = new Float32Array(0);
     private size_: Float32Array = new Float32Array(0);
-    private color_: Uint8Array = new Uint8Array(0); // RGBA（各 0..255）
+    private color_: Uint32Array = new Uint32Array(0); // RGBA（各 0..255）
 
     constructor() {
     }
@@ -141,7 +141,7 @@ class RectRendererWebGL {
 
     // 内部処理
     private toStyle_(colorVal: number): string {
-        return `rgba(${(colorVal >>> 24) & 255}, ${(colorVal >>> 16) & 255}, ${(colorVal >>> 8) & 255}, ${(colorVal & 255) / 255})`;
+        return `rgba(${(colorVal) & 255}, ${(colorVal >>> 8) & 255}, ${(colorVal >>> 16) & 255}, ${((colorVal >>> 24) & 255) / 255})`;
     }
 
     private queueRectPacked_(cssLeft: number, cssTop: number, cssWidth: number, cssHeight: number, packedRGBA: number): void {
@@ -177,13 +177,7 @@ class RectRendererWebGL {
         this.size_[i2 + 0] = w;
         this.size_[i2 + 1] = h;
 
-        // packed を RGBA 順の 4byte に分解して color_ に詰める
-        const c4 = this.count_ * 4;
-        this.color_[c4 + 0] = (packedRGBA >>> 24) & 255; // R
-        this.color_[c4 + 1] = (packedRGBA >>> 16) & 255; // G
-        this.color_[c4 + 2] = (packedRGBA >>> 8)  & 255; // B
-        this.color_[c4 + 3] = (packedRGBA)        & 255; // A
-
+        this.color_[this.count_] = packedRGBA;
         this.count_++;
     }
 
@@ -191,11 +185,11 @@ class RectRendererWebGL {
         const newCap = Math.max(2048, this.cap_ * 2);  // 最低 2048 から
         const pos = new Float32Array(newCap * 2);
         const siz = new Float32Array(newCap * 2);
-        const col = new Uint8Array(newCap * 4);
+        const col = new Uint32Array(newCap);
         if (this.cap_ > 0) {
             pos.set(this.pos_.subarray(0, this.cap_ * 2));
             siz.set(this.size_.subarray(0, this.cap_ * 2));
-            col.set(this.color_.subarray(0, this.cap_ * 4));
+            col.set(this.color_.subarray(0, this.cap_));
         }
         this.pos_ = pos;
         this.size_ = siz;
@@ -221,7 +215,7 @@ class RectRendererWebGL {
         gl.vertexAttribDivisor(this.attrib_a_size_, 1);
 
         gl.bindBuffer(gl.ARRAY_BUFFER, this.bufColor_);
-        gl.bufferData(gl.ARRAY_BUFFER, this.color_.subarray(0, this.count_ * 4), gl.DYNAMIC_DRAW);
+        gl.bufferData(gl.ARRAY_BUFFER, new Uint8Array(this.color_.buffer, 0, this.count_ * 4), gl.DYNAMIC_DRAW); // アップロード時だけバイトビューに変換して送る
         gl.enableVertexAttribArray(this.attrib_a_color_);
         gl.vertexAttribPointer(this.attrib_a_color_, 4, gl.UNSIGNED_BYTE, true, 0, 0);
         gl.vertexAttribDivisor(this.attrib_a_color_, 1);
@@ -462,18 +456,14 @@ class RectRendererSoft {
             let p = rowStart + x0;
             const pEnd = rowStart + x1;
             for (; p <= pEnd; p++) {
-                imageData[p] =
-                    ((rgb & 0x000000ff) << 24) |  // A -> 上位バイト
-                    ((rgb & 0x0000ff00) << 8)  |  // B -> 次バイト
-                    ((rgb & 0x00ff0000) >>> 8) |  // G -> 次バイト（符号なし右シフト）
-                    ((rgb & 0xff000000) >>> 24);  // R -> 下位バイト
+                imageData[p] = rgb; // RGBA 32bit 直接書き込み
             }
             rowStart += wDOM;
         }
     }
 
     toStyle_(colorVal: number): string {
-        return `rgba(${(colorVal >>> 24) & 255}, ${(colorVal >>> 16) & 255}, ${(colorVal >>> 8) & 255}, ${(colorVal & 255) / 255})`;
+        return `rgba(${(colorVal) & 255}, ${(colorVal >>> 8) & 255}, ${(colorVal >>> 16) & 255}, ${((colorVal >> 24)& 255) / 255})`;
     };
 
     fillRect(cssLeft: number, cssTop: number, cssWidth: number, cssHeight: number, packed: number): void {
