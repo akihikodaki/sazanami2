@@ -1,31 +1,63 @@
 // src/io/getFZSTD_Reader.ts
 import ZstdWorker from "./zstd_worker";
 
+// worker からはチャンクの展開後に postMessage で "progress" が来るので，
+// data に対する，圧縮元バイト数のクレジットを持たせる
+type OutQueueItem = { 
+    buf: Uint8Array; 
+    credit: number 
+};
+
 const getFZSTD_Reader = (file: File, updateByteReads: (bytes: number) => void) => {
     const compressedReader = file.stream().getReader();
     const worker = new ZstdWorker();
 
-    const outQueue: Uint8Array[] = [];
-    let pendingResolve: ((v: Uint8Array | null) => void) | null = null;
+    // outQueue: Uint8Array[] -> OutQueueItem[]（credit を保持）
+    const outQueue: OutQueueItem[] = [];
+    let pendingResolve: ((v: OutQueueItem | null) => void) | null = null;
 
     // end を受けても「すぐ閉じない」ためのフラグ
     let endedFromWorker = false;
     let eofSent = false;
 
+    // progress を data に付けられないときに貯める
+    let creditCarry = 0;
+
+    // 直近の未クレジット data に progress をひも付ける helper
+    const attachCreditToTail = (bytes: number) => {
+        if (bytes <= 0) return;
+        for (let i = outQueue.length - 1; i >= 0; i--) {
+            if (outQueue[i].credit === 0) {
+                outQueue[i].credit = bytes;
+                return;
+            }
+        }
+        // 今キューに data が無い/全部クレジット済み → 次の data に回す
+        creditCarry += bytes;
+    };
+
     worker.onmessage = (e: MessageEvent) => {
         const { type } = e.data || {};
         if (type === "data") {
             const data = new Uint8Array(e.data.chunk);
+            // data 到着時点で carry があれば、この data に付与
+            const item: OutQueueItem = { buf: data, credit: 0 };
+            if (creditCarry > 0) {
+                item.credit = creditCarry >>> 0;
+                creditCarry = 0;
+            }
+
             if (pendingResolve) {
                 const resolve = pendingResolve; pendingResolve = null;
-                resolve(data);
+                resolve(item);
             } else {
-                outQueue.push(data);
+                outQueue.push(item);
             }
         } else if (type === "progress") {
-            // 消費済みバイトで進捗更新
-            const bytes: number = e.data.bytes >>> 0;
-            if (bytes > 0) updateByteReads(bytes);
+            // 直近 data にクレジットとしてひも付ける
+            const bytes: number = e.data.bytes;
+            if (bytes > 0) 
+                attachCreditToTail(bytes);
         } else if (type === "end") {
             // すべての data を吐き切った“後”に閉じたい
             endedFromWorker = true;
@@ -41,7 +73,10 @@ const getFZSTD_Reader = (file: File, updateByteReads: (bytes: number) => void) =
         pull: async (controller) => {
             // 1) まず手元のキューを優先して吐く
             if (outQueue.length > 0) {
-                controller.enqueue(outQueue.shift()!);
+                const { buf, credit } = outQueue.shift()!;
+                controller.enqueue(buf);
+                // 進捗は「ストリームから読み出されたデータ」に対応する圧縮元バイトで加算
+                if (credit > 0) updateByteReads(credit);
                 return;
             }
 
@@ -54,7 +89,7 @@ const getFZSTD_Reader = (file: File, updateByteReads: (bytes: number) => void) =
             }
 
             // 3) 次の伸長チャンクを待ちつつ、圧縮側を1ステップ進める
-            const nextChunk = await new Promise<Uint8Array | null>(async (resolve) => {
+            const nextItem = await new Promise<OutQueueItem | null>(async (resolve) => {
                 pendingResolve = resolve;
 
                 const { done, value } = await compressedReader.read();
@@ -70,13 +105,14 @@ const getFZSTD_Reader = (file: File, updateByteReads: (bytes: number) => void) =
                 }
 
                 if (value && value.byteLength > 0) {
-                    // 進捗は worker からの "progress" に統一
+                    // 進捗は worker からの "progress" を data にひも付ける方式に統一
                     worker.postMessage({ type: "push", chunk: value, isLast: false }, [value.buffer]);
                 }
             });
 
-            if (nextChunk) {
-                controller.enqueue(nextChunk);
+            if (nextItem) {
+                controller.enqueue(nextItem.buf);
+                if (nextItem.credit > 0) updateByteReads(nextItem.credit);
                 return;
             }
 
