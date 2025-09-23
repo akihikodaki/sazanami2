@@ -503,23 +503,11 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
         };
     }, [store]);
 
-    const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-        e.preventDefault();
-        canvasRef.current!.style.cursor = "default";
-
-        const file = e.dataTransfer.files[0];
-        if (file) {
-            store.trigger(ACTION.FILE_LOAD, file);
-        }
-    };
-    const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => e.preventDefault();
 
     return (
         <div
             ref={divRef}
             style={{ width: "100%", height: "100%", overflow: "hidden" }}
-            onDrop={handleDrop}
-            onDragOver={handleDragOver}
         >
             <canvas
                 ref={canvasRef}

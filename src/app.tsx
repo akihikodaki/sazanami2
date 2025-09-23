@@ -4,16 +4,30 @@ import Store, { ACTION, CHANGE } from "./store";
 import {StatusBar, ToolBar, LoadingBar, VersionDialog, HelpDialog, SettingsPanel, SplitContainer} from "./ui_parts";
 import MainCanvas from "./main_canvas";
 
-import { Modal } from "react-bootstrap";
 
 let store = new Store();
 
 const App = () => {
+    const divRef = useRef<HTMLDivElement>(null);
     useEffect(() => { // マウント時
     }, []);
 
+    const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        divRef.current!.style.cursor = "default";
+        const file = e.dataTransfer.files[0];
+        if (file) {
+            store.trigger(ACTION.FILE_LOAD, file);
+        }
+    };
+    const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => e.preventDefault();
+
     return (
-        <div >
+        <div
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
+            ref={divRef}
+        >
             {/* // flexDirection: "column" と flexGrow: 1 を使うことで，Canvas が画面いっぱいに広がるようにしている */}
             <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
                 <ToolBar store={store}/>
