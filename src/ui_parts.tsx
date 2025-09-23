@@ -15,7 +15,7 @@ const ToolBar = (props: {store: Store;}) => {
 
     const openFile = async () => {
         if (typeof (window as any).showOpenFilePicker !== 'function') {
-            console.log("showOpenFilePicker is not supported");
+            store.trigger(ACTION.LOG_ADD, "showOpenFilePicker is not supported");
             return;
         }
         
@@ -26,7 +26,7 @@ const ToolBar = (props: {store: Store;}) => {
             store.trigger(ACTION.FILE_LOAD, file);
          }
          catch (error) {
-            console.error("Error opening file:", error);
+            store.trigger(ACTION.LOG_ADD, "Error opening file:" + error);
          }
         // console.log(contents); // ファイル内容を表示
     };

@@ -154,7 +154,9 @@ class Store {
                 // 初期化が通る＝レンダリング可能な定義
                 return true;
             } catch (e) {
-                console.error("DataView.init failed:", e);
+                let msg = "DataView.init failed:" + e;
+                console.error(msg);
+                this.trigger(ACTION.LOG_ADD, msg);
                 return false;
             }
         }
