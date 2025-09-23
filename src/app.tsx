@@ -1,13 +1,11 @@
-import React, { useRef, useEffect, useState } from "react";
-import Store, { ACTION, CHANGE } from "./store";
+import React, { useRef, useEffect } from "react";
+import Store, { ACTION } from "./store";
 
 import {StatusBar, ToolBar, LoadingBar, VersionDialog, HelpDialog, SettingsPanel, SplitContainer} from "./ui_parts";
 import MainCanvas from "./main_canvas";
 
-
-let store = new Store();
-
 const App = () => {
+    const storeRef = useRef(new Store());
     const divRef = useRef<HTMLDivElement>(null);
     useEffect(() => { // マウント時
     }, []);
@@ -17,7 +15,7 @@ const App = () => {
         divRef.current!.style.cursor = "default";
         const file = e.dataTransfer.files[0];
         if (file) {
-            store.trigger(ACTION.FILE_LOAD, file);
+            storeRef.current.trigger(ACTION.FILE_LOAD, file);
         }
     };
     const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => e.preventDefault();
@@ -30,16 +28,16 @@ const App = () => {
         >
             {/* // flexDirection: "column" と flexGrow: 1 を使うことで，Canvas が画面いっぱいに広がるようにしている */}
             <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
-                <ToolBar store={store}/>
-                <LoadingBar store={store} />
-                <SplitContainer store={store}
-                    leftPanel={<MainCanvas store={store} />}
-                    rightPanel={<SettingsPanel store={store} />}
+                <ToolBar store={storeRef.current} />
+                <LoadingBar store={storeRef.current} />
+                <SplitContainer store={storeRef.current}
+                    leftPanel={<MainCanvas store={storeRef.current} />}
+                    rightPanel={<SettingsPanel store={storeRef.current} />}
                 />
-                <StatusBar store={store}/>
+                <StatusBar store={storeRef.current} />
             </div>
-            <VersionDialog store={store}/>
-            <HelpDialog store={store}/>
+            <VersionDialog store={storeRef.current} />
+            <HelpDialog store={storeRef.current} />
         </div>
     );
 };
