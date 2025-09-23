@@ -88,6 +88,7 @@ class Loader {
     private reader_: FileLineReader | null = null;
 
     private onFormatDetected_: null | (() => void) = null;
+    private warningCallback_: null | ((msg: string) => void) = null;
 
     get detectionDone() { return this.detectionDone_; }
 
@@ -121,17 +122,19 @@ class Loader {
         finishCallback: (lines: number, elapsedMs: number) => void,
         formatDetected: () => void,
         progressCallback: (progress: number, lineNum: number) => void,
-        errorCallback: (error: any, lineNum: number) => void
+        errorCallback: (error: any, lineNum: number) => void,
+        warningCallback: (msg: string) => void
     ) {
         this.reset();
         this.onFormatDetected_ = formatDetected;
+        this.warningCallback_ = warningCallback;
         let reader = new FileLineReader(file);
         this.reader_ = reader;
         this.startTime_ = (new Date()).getTime();
 
         reader.load(
             (line: string) => { // onLineRead
-                this.parseLine_(line, errorCallback);
+                this.parseLine_(line);
                 if (this.lineNum % Loader.REPORT_INTERVAL === 0) {
                     this.dataViewInvalidated_ = true;   // max を更新した可能性があるので invalidate
                     progressCallback(reader.getProgress(), this.lineNum);
@@ -168,8 +171,7 @@ class Loader {
     }
 
     private parseLine_(
-        line: string,
-        errorCallback: (error: any, lineNum: number) => void
+        line: string
     ): void {
         line = line.trim();
 
@@ -182,9 +184,8 @@ class Loader {
             if (values.length > this.headers_.length) {
                 this.numWarning++;
                 if (this.numWarning <= 10) {
-                    errorCallback(
-                        new Error(`Line:${this.lineNum} Expected ${this.headers_.length} columns, but got ${values.length}`),
-                        this.lineNum
+                    this.warningCallback_?.(
+                        `Warning: Line:${this.lineNum} Expected ${this.headers_.length} columns, but got ${values.length}`
                     );
                 }
                 values = values.slice(0, this.headers_.length);

@@ -14,7 +14,9 @@ enum ACTION {
     SET_VIEW_SPEC, // 互換用（未使用なら残しておく）
     VIEW_DEF_APPLY,           // ビューから設定
     VIEW_DEF_INFER_REQUEST,   // データから推論（コミットに反映）
-
+    LOG_ADD,                  // 文字列ログを追加
+    LOG_CLEAR,                // ログをクリア
+    SHOW_LOG_OVERLAY,       // デバッグオーバーレイの表示/非表示
     ACTION_END, // 末尾
 };
 
@@ -36,6 +38,9 @@ enum CHANGE {
     HEADERS_CHANGED,          // ヘッダ一覧が利用可能になった／変わった
     VIEW_DEF_CHANGED,         // コミット済み ViewDefinition が変わった
     VIEW_DEF_PREVIEWED,       // プレビューが適用された（必要に応じて購読）
+    LOG_ADDED,                // payload: LogEntry
+    LOG_CLEARED,
+    LOG_OVERLAY_VISIBILITY_CHANGED, // payload: boolean
 };
 
 class Store {
@@ -52,6 +57,12 @@ class Store {
     // Settings panel を表示するかどうか
     showSettings: boolean = true;
 
+    // Debug Overlay 表示状態
+    showDebugOverlay: boolean = false;
+
+    // Store 内部に簡易ログを保持（公開メソッドなし）
+    private logs: string[] = [];
+
     constructor() {
         this.loader = new Loader();
 
@@ -67,15 +78,15 @@ class Store {
                     // ロード完了
                     this.trigger(CHANGE.FILE_LOADING_END);
                     this.trigger(CHANGE.FILE_LOADED);
-
                     // ヘッダが揃ったことを通知（Editor の候補更新用）
                     this.trigger(CHANGE.HEADERS_CHANGED, this.loader.headers);
-
-                    // メッセージ
-                    this.trigger(CHANGE.SHOW_MESSAGE_IN_STATUS_BAR, `File loaded successfully: ${lines} lines in ${elapsedMs} ms`);
-
                     // キャンバス再描画など
                     this.trigger(CHANGE.CONTENT_UPDATED);
+
+                    // メッセージ
+                    let message = `File loaded successfully: ${lines} lines in ${elapsedMs} ms`;
+                    this.trigger(CHANGE.SHOW_MESSAGE_IN_STATUS_BAR, message);
+                    this.trigger(ACTION.LOG_ADD, message);
                 },
                 () => {
                     // フォーマット検出完了
@@ -93,6 +104,10 @@ class Store {
                     console.error(`Error loading file: ${err}`);
                     this.trigger(CHANGE.FILE_LOADING_END);
                     this.trigger(CHANGE.SHOW_MESSAGE_IN_STATUS_BAR, "Failed to load file");
+                    this.trigger(ACTION.LOG_ADD, "File load failed: " + err);
+                },
+                (msg) => { // warning
+                    this.trigger(ACTION.LOG_ADD, msg);
                 }
             );
         });
@@ -107,7 +122,19 @@ class Store {
         });
         this.on(ACTION.CANVAS_FIT, () => { this.trigger(CHANGE.CANVAS_FIT); });
 
+        this.on(ACTION.LOG_ADD, (payload: string) => {
+            this.logs.push(payload);
+            this.trigger(CHANGE.LOG_ADDED, payload);
+        });
+        this.on(ACTION.LOG_CLEAR, () => {
+            this.logs = [];
+            this.trigger(CHANGE.LOG_CLEARED);
+        });
 
+        this.on(ACTION.SHOW_LOG_OVERLAY, (show: boolean) => {
+            this.showDebugOverlay = !!show;
+            this.trigger(CHANGE.LOG_OVERLAY_VISIBILITY_CHANGED, this.showDebugOverlay);
+        });
 
         // data_view.ts のバリデーションを用いて厳密チェックし、初期化が通るかを確認する
         const validateAndTryInit_ = (def: ViewDefinition): boolean => {

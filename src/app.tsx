@@ -1,7 +1,8 @@
+// src/app.tsx
 import React, { useRef, useEffect } from "react";
 import Store, { ACTION } from "./store";
 
-import {StatusBar, ToolBar, LoadingBar, VersionDialog, HelpDialog, SettingsPanel, SplitContainer} from "./ui_parts";
+import {StatusBar, ToolBar, LoadingBar, VersionDialog, HelpDialog, SettingsPanel, SplitContainer, LogOverlay} from "./ui_parts";
 import MainCanvas from "./main_canvas";
 
 const App = () => {
@@ -34,6 +35,7 @@ const App = () => {
                     leftPanel={<MainCanvas store={storeRef.current} />}
                     rightPanel={<SettingsPanel store={storeRef.current} />}
                 />
+                <LogOverlay store={storeRef.current} />
                 <StatusBar store={storeRef.current} />
             </div>
             <VersionDialog store={storeRef.current} />

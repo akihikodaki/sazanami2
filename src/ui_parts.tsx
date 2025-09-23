@@ -7,10 +7,11 @@ import {Nav, Navbar, NavDropdown} from "react-bootstrap";
 import { Modal } from "react-bootstrap";
 
 // react-icons 経由でアイコンをインポートすると，webpack でのビルド時に必要なアイコンのみがバンドルされる
-import { BsList, BsX, BsArrowsFullscreen } from 'react-icons/bs';
+import { BsList, BsX, BsArrowsFullscreen, BsJournalText, BsTrash } from 'react-icons/bs';
 
 const ToolBar = (props: {store: Store;}) => {
     let store = props.store;
+    const [logCount, setLogCount] = useState(0);
 
     const openFile = async () => {
         if (typeof (window as any).showOpenFilePicker !== 'function') {
@@ -39,12 +40,21 @@ const ToolBar = (props: {store: Store;}) => {
         case "menu_keyboard_shortcuts": store.trigger(ACTION.DIALOG_HELP_OPEN); break;
         case "menu_settings": store.trigger(ACTION.SHOW_SETTINGS, !store.showSettings); break;
         case "menu_fit": store.trigger(ACTION.CANVAS_FIT); break;
+        case "menu_debug_overlay_toggle": store.trigger(ACTION.SHOW_LOG_OVERLAY, !store.showDebugOverlay); break;
         }
         setSelectedKey(0);
     };
     const [selectedKey, setSelectedKey] = useState(0);
 
     useEffect(() => { // マウント時
+        const onAdded = () => setLogCount(c => c + 1);
+        const onCleared = () => setLogCount(0);
+        store.on(CHANGE.LOG_ADDED, onAdded);
+        store.on(CHANGE.LOG_CLEARED, onCleared);
+        return () => {
+            store.off(CHANGE.LOG_ADDED, onAdded);
+            store.off(CHANGE.LOG_CLEARED, onCleared);
+        };
     }, []);
 
     return (
@@ -74,11 +84,19 @@ const ToolBar = (props: {store: Store;}) => {
             <Nav onSelect={dispatch} activeKey={selectedKey}
                 style={{ color: "#C9CACB" }} className="me-auto" // このクラスでリンクが左側に配置される
             >
-                {
                 <Nav.Link className="nav-link tool-bar-link" eventKey="menu_fit">
                     <BsArrowsFullscreen size={14} /> Fit
                 </Nav.Link>
-                /* 
+                <Nav.Link
+                    className="nav-link tool-bar-link"
+                    eventKey="menu_debug_overlay_toggle"
+                    title={logCount === 0 ? "No logs yet" : `${logCount} logs`}
+                >
+                    <BsJournalText size={14} />{" "}
+                    {logCount > 0 ? `Log (${logCount})` : "Log"}
+                </Nav.Link>
+                {
+                /*
                 <Nav.Link className="nav-link tool-bar-link" eventKey="zoom-in">
                     <i className="bi bi-zoom-in"></i> Zoom In                
                 </Nav.Link>
@@ -325,7 +343,116 @@ const SettingsPanel: React.FC<{ store: Store }> = ({ store }) => {
     );
 };
 
+type Props = {
+    store: Store;
+    width?: number;
+    height?: number;
+};
 
+const LogOverlay: React.FC<Props> = ({ store, width = 420, height = 120 }) => {
+    const [logs, setLogs] = useState<string[]>([]);
+    const [visible, setVisible] = useState<boolean>(store.showDebugOverlay);
+    const listRef = useRef<HTMLDivElement | null>(null);
 
+    useEffect(() => {
+        const onAdded = (entry: string) => setLogs(prev => [...prev, entry]);
+        const onCleared = () => setLogs([]);
+        const onVis = (show: boolean) => setVisible(show);
 
-export {ToolBar, StatusBar, LoadingBar, VersionDialog, HelpDialog, SplitContainer, SettingsPanel};
+        store.on(CHANGE.LOG_ADDED, onAdded);
+        store.on(CHANGE.LOG_CLEARED, onCleared);
+        store.on(CHANGE.LOG_OVERLAY_VISIBILITY_CHANGED, onVis);
+
+        setVisible(store.showDebugOverlay);
+
+        return () => {
+            store.off(CHANGE.LOG_ADDED, onAdded);
+            store.off(CHANGE.LOG_CLEARED, onCleared);
+            store.off(CHANGE.LOG_OVERLAY_VISIBILITY_CHANGED, onVis);
+        };
+    }, [store]);
+
+    useEffect(() => {
+        const el = listRef.current;
+        if (!el) return;
+        el.scrollTop = el.scrollHeight;
+    }, [logs]);
+
+    // 非表示なら描画しない
+    if (!visible) return null;
+
+    const iconBtn: React.CSSProperties = {
+        position: "absolute",
+        top: 2,
+        width: 22,
+        height: 22,
+        border: "none",
+        background: "transparent",
+        color: "#E6E7E9",
+        cursor: "pointer",
+        padding: 0,
+        display: "grid",
+        placeItems: "center",
+        lineHeight: 0
+    };
+
+    return (
+        <div
+            style={{
+                position: "fixed",
+                left: 8,
+                bottom: 32, // StatusBar(24px)直上
+                width,
+                height,
+                zIndex: 9999,
+                overflow: "hidden",
+                borderRadius: 6,
+                background: "rgba(0,0,0,0.55)",
+                color: "#E6E7E9",
+                fontSize: 12,
+                fontFamily:
+                    'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace'
+            }}
+        >
+            {/* Clear（ゴミ箱アイコン） */}
+            <button
+                onClick={() => store.trigger(ACTION.LOG_CLEAR)}
+                title="Clear"
+                aria-label="Clear logs"
+                style={{ ...iconBtn, right: 26 }}
+            >
+                <BsTrash size={14} />
+            </button>
+
+            {/* Close（バツアイコン） */}
+            <button
+                onClick={() => store.trigger(ACTION.SHOW_LOG_OVERLAY, false)}
+                title="Close"
+                aria-label="Close overlay"
+                style={{ ...iconBtn, right: 4 }}
+            >
+                <BsX size={16} />
+            </button>
+
+            {/* 本文（メッセージだけ） */}
+            <div
+                ref={listRef}
+                style={{
+                    height: "100%",
+                    overflow: "auto",
+                    padding: "6px 8px",
+                    lineHeight: 1.45,
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-word",
+                    paddingRight: 48 // 右上アイコン分の余白
+                }}
+            >
+                {logs.map(l => (
+                    <div>{l}</div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
+export {ToolBar, StatusBar, LoadingBar, VersionDialog, HelpDialog, SplitContainer, SettingsPanel, LogOverlay};
