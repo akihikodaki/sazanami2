@@ -1,6 +1,7 @@
 // store.ts
 import { Loader } from "./loader";
 import { ViewDefinition, DataView, inferViewDefinition } from "./data_view";
+import { Settings } from "./settings";
 
 // ACTION は ACTION_END の直前に追加していく（CHANGE の開始値に影響するため）
 enum ACTION {
@@ -17,6 +18,7 @@ enum ACTION {
     LOG_ADD,                  // 文字列ログを追加
     LOG_CLEAR,                // ログをクリア
     SHOW_LOG_OVERLAY,       // デバッグオーバーレイの表示/非表示
+    SETTINGS_SAVE_REQUEST,  // 設定保存リクエスト
     ACTION_END, // 末尾
 };
 
@@ -43,6 +45,8 @@ enum CHANGE {
     LOG_OVERLAY_VISIBILITY_CHANGED, // payload: boolean
 };
 
+
+
 class Store {
     // イベントハンドラ登録
     handlers_: { [key: number]: Array<(...args: any[]) => void> } = {};
@@ -63,11 +67,26 @@ class Store {
     // Store 内部に簡易ログを保持（公開メソッドなし）
     private logs: string[] = [];
 
+    // アプリ設定
+    settings = new Settings();
+    saveDefinition() {
+        if (this.viewDef_ && this.loader.headers.length > 0) {
+            const key = (this.loader.headers ?? []).join("--");
+            if (key) {
+                this.settings.viewDefMapHistory[key] = this.viewDef_;
+                this.settings.save();
+            }
+        }
+    };
+
     constructor() {
+        this.settings.load();
         this.loader = new Loader();
 
+        
         // ---------------- ファイルロード ----------------
         this.on(ACTION.FILE_LOAD, (file: File) => {
+            this.saveDefinition();
             // 新規ファイル読み込み時は ViewDefinition をリセット
             this.viewDef_ = null;
             this.trigger(CHANGE.FILE_LOADING_START);
@@ -90,8 +109,15 @@ class Store {
                 },
                 () => {
                     // フォーマット検出完了
-                    const inferred = inferViewDefinition(this.loader);
-                    applyDefinition(inferred);
+                    let key = (this.loader.headers ?? []).join("--");
+                    let def: ViewDefinition | null = null;
+                    if (key != "" && key in this.settings.viewDefMapHistory) {  // 過去に保存された定義があれば復元して適用
+                        def = this.settings.viewDefMapHistory[key];
+                    }
+                    else {
+                        def = inferViewDefinition(this.loader);
+                    }
+                    applyDefinition(def);
                     this.trigger(CHANGE.FILE_FORMAT_DETECTED);
                 },
                 (percent, _lineNum) => {
@@ -134,6 +160,11 @@ class Store {
         this.on(ACTION.SHOW_LOG_OVERLAY, (show: boolean) => {
             this.showDebugOverlay = !!show;
             this.trigger(CHANGE.LOG_OVERLAY_VISIBILITY_CHANGED, this.showDebugOverlay);
+        });
+
+        this.on(ACTION.SETTINGS_SAVE_REQUEST, () => {
+            this.saveDefinition();
+            this.settings.save();
         });
 
         // data_view.ts のバリデーションを用いて厳密チェックし、初期化が通るかを確認する

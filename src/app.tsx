@@ -9,6 +9,9 @@ const App = () => {
     const storeRef = useRef(new Store());
     const divRef = useRef<HTMLDivElement>(null);
     useEffect(() => { // マウント時
+        window.addEventListener("pagehide", (ev: PageTransitionEvent) => {
+            storeRef.current.trigger(ACTION.SETTINGS_SAVE_REQUEST);
+        });
     }, []);
 
     const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
