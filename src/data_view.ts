@@ -351,19 +351,27 @@ export class DataView {
     getY(i: number): number { return this.yCol_.getNumber(i); }
 
     // カラーインデックスの取得
-    // 既定ポリシー：パレットサイズ 256、colorField の値を整数に丸めた上で mod を取る
+    // colorField の値をパレットサイズより小さい整数に丸める
     // 負の値は正に変換する
     getColorIndex(i: number): number {
         if (!this.colorCol_) return 0;
         const v = this.colorCol_.getNumber(i);
         if (!Number.isFinite(v)) return 0;
+
+        const range = this.colorCol_.stat.max - this.colorCol_.stat.min;
+        if (range > 128) {  // 連続値っぽい場合はスケーリングする
+            const t = (v - this.colorCol_.stat.min) / range;
+            return Math.floor(t * this.paletteSize_);
+        }
+        
+        // 離散値っぽい場合は mod でそのまま丸める
         const n = Math.trunc(v);
         const m = this.paletteSize_;
         const idx = n % m;
         return idx < 0 ? idx + m : idx;
     }
 
-    // パレット（uint32 RGBA packed）の取得 ----
+    // パレット（uint32 RGBA packed）の取得
     getPalette(): Uint32Array {
         return this.palettePacked_;
     }
@@ -409,8 +417,7 @@ export class DataView {
     get definition() { return this.def_; }
 }
 
-// 必要に応じて仮想列と列の仕様を返す
-
+// 必要に応じて仮想列と列の仕様を推定して返す
 export const inferViewDefinition = (loader: Loader): ViewDefinition => {
     if (loader.detectionDone === false) {
         throw new Error("Type detection not done yet");
