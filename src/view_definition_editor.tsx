@@ -447,10 +447,17 @@ const strictApply = (store: Store, testDef: ViewDefinition): { ok: boolean; erro
         const v = dv.validateColumnSpec(store.loader, testDef.columns ?? {});
         if (!v.ok) return { ok: false, errors: v.errors };
         dv.init(store.loader, testDef);
+        let oldX = store.viewDef?.view.axisXField;
+        let oldY = store.viewDef?.view.axisYField;
+
         // ここまで到達したら安全：即時反映
         store.trigger(ACTION.VIEW_DEF_APPLY, testDef);
-        store.trigger(ACTION.CANVAS_FIT);
         store.trigger(ACTION.SHOW_MESSAGE_IN_STATUS_BAR, "View updated");
+
+        // X 軸か Y 軸が変化した場合のみ FIT しなおす
+        if (oldX !== store.viewDef?.view.axisXField || oldY !== store.viewDef?.view.axisYField)
+            store.trigger(ACTION.CANVAS_FIT);
+
         return { ok: true, errors: [] };
     } catch (e: any) {
         return { ok: false, errors: [String(e?.message ?? e)] };
