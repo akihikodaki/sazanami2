@@ -15,9 +15,9 @@ import {
     BsThreeDots
 } from "react-icons/bs";
 
-
+//
 // 定数（幅・配色）
-
+//
 
 // Axes 上のチップ幅に合わせるため、Columns 側も同じ固定幅にする
 const CHIP_WIDTH = 176;
@@ -29,10 +29,6 @@ const PALETTE = {
     code:  "#E0AE5B", // アンバー
     exp:   "#CA8AFF", // バイオレット
 };
-
-
-// 型定義
-
 
 // Columns パレットの1アイテム（実列 / 派生列 / __index__）
 type PaletteItem = {
@@ -48,10 +44,9 @@ type AxisSlot = {
     acceptNumeric: boolean; // 数値のみ受け入れ
 };
 
-
+//
 // スタイル（ダークUI）
-
-
+//
 const card: React.CSSProperties = { background: "#1f2229", border: "1px solid #383B41", borderRadius: 6, padding: 9 };
 const header: React.CSSProperties = { fontWeight: 600, color: "#C9CACB", marginBottom: 6 };
 const subheader: React.CSSProperties = { color: "#AEB0B3", fontSize: 9 };
@@ -118,10 +113,8 @@ const controlBtnGhost: React.CSSProperties = {
 };
 
 
-
 // ユーティリティ（式の軽量バリデーション）
 //   * 厳密検証は DataView.validateColumnSpec → init で実施
-
 const isSafeExpression = (expr: string): boolean => /^[0-9\s+\-*/%().A-Za-z_]+$/.test(expr);
 const extractVariables = (expr: string): string[] => {
     const idRegex = /\b[A-Za-z_][A-Za-z0-9_]*\b/g;
@@ -143,9 +136,8 @@ const extractVariables = (expr: string): string[] => {
 
 
 // 色カテゴリとバッジ
-
 type ColorCat = "index" | "int" | "code" | "exp";
-function colorCategory(name: string, type: ColumnType | "DERIVED" | "INDEX"): ColorCat {
+const colorCategory = (name: string, type: ColumnType | "DERIVED" | "INDEX"): ColorCat => {
     if (name === "__index__" || type === "INDEX") return "index";
     if (type === "DERIVED") return "exp";
     switch (type) {
@@ -171,7 +163,6 @@ const typeBadgeText = (t: ColumnType | "DERIVED" | "INDEX") => {
 
 
 // Columns パレット（RAW_STRING は候補から除外）
-
 const buildPalette = (store: Store, current: ViewDefinition | null, search: string): PaletteItem[] => {
     const headers: string[] = store.loader?.headers ?? [];
     const typesMap: { [name: string]: ColumnType } = store.loader?.types ?? {};
@@ -201,7 +192,6 @@ const buildPalette = (store: Store, current: ViewDefinition | null, search: stri
 // ColumnChip（Columns / Axes 共通）
 //  * 左端2pxアクセント（カテゴリ色）
 //  * derived は exp バッジを非表示（見切れ対策）
-
 const ColumnChip: React.FC<{
     name: string;
     type: ColumnType | "DERIVED" | "INDEX";
@@ -248,7 +238,6 @@ const ColumnChip: React.FC<{
 
 
 // AxisCard（DnD 受け入れ）— Axes のチップは固定幅（CHIP_WIDTH）
-
 const AxisCard: React.FC<{
     label: string;
     assignedName: string | null;
@@ -327,7 +316,6 @@ const AxisCard: React.FC<{
 
 
 // モーダル（新規追加 / 再編集）— ダークテーマ（CSS を一度注入）
-
 type EditModalProps = {
     show: boolean;
     mode: "create" | "edit";
