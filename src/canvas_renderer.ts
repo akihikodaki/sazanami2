@@ -181,6 +181,8 @@ class CanvasRenderer {
         const avgNumPointX = (dataView.getEndIdx(Infinity,Infinity) - dataView.getStartIdx(-Infinity, -Infinity)) / (dataView.getMaxY() - dataView.getMinY());
         let step = Math.max(1, Math.floor(ratioY * avgNumPointX / 4 / 32));
 
+        if (endIdx - startIdx < 100000) step = 1; // 少ない場合は間引かない
+
         // データ描画＆インデックス記録
         this.rectRenderer.beginRawMode(canvas, scaleY);
 
@@ -195,6 +197,12 @@ class CanvasRenderer {
             const x = this.MARGIN_LEFT_ + xVal * scaleX - offsetX;
             const y = yVal * scaleY - offsetY;
             const c = colorPalette[dataView.getColorIndex(i)];
+
+            if (x + pxW < this.MARGIN_LEFT_) continue;
+            if (x >= width) continue;
+            if (y + pxH < 0) continue;
+            if (y >= plotHeight) continue;
+
             this.rectRenderer.fillRect(x, y, pxW, pxH, c);
 
             // visible 範囲内なら、grid 上のセルに記録
@@ -210,7 +218,7 @@ class CanvasRenderer {
             }
             // モアレを軽減するために適当にノイズを乗せる
             if (step > 1) {
-                i += ((i >> 5) ^ (i >> 17)) & 1;
+                i += ((((i * 17) >> 5) ^ ((i * 31) >> 10)) & 7) == 0 ? 1 : 0;
             }
         }
         this.rectRenderer.endRawMode();
