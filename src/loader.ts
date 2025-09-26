@@ -128,7 +128,7 @@ class Loader {
         this.reset();
         this.onFormatDetected_ = formatDetected;
         this.warningCallback_ = warningCallback;
-        let reader = new FileLineReader(file);
+        let reader = new FileLineReader(file.stream(), file.name, file.size);
         this.reader_ = reader;
         this.startTime_ = (new Date()).getTime();
 

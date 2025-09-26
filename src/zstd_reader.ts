@@ -8,8 +8,8 @@ type OutQueueItem = {
     credit: number 
 };
 
-const getFZSTD_Reader = (file: File, updateByteReads: (bytes: number) => void) => {
-    const compressedReader = file.stream().getReader();
+const getFZSTD_Reader = (stream: ReadableStream<Uint8Array>, fileName: string, fileSize: number, updateByteReads: (bytes: number) => void) => {
+    const compressedReader = stream.getReader();
     const worker = new ZstdWorker();
 
     // outQueue: Uint8Array[] -> OutQueueItem[]（credit を保持）

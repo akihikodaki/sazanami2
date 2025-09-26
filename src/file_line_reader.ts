@@ -10,12 +10,16 @@ export class FileLineReader {
     private isZstd_ = false;
     private canceled_ = false;
 
-    constructor(private file_: File) {
-    }
+    // file.stream() の返す ReadableStream とメタ情報を受け取る
+    constructor(
+        private stream_: ReadableStream<Uint8Array>,
+        private fileName_: string,
+        private fileSize_: number,
+    ) {}
 
     /** 現在までの読み取り割合（0〜1）。空ファイルは 1。 */
     getProgress(): number {
-        const total = this.file_.size;
+        const total = this.fileSize_;
         if (total === 0) return 1;
         return Math.min(1, this.bytesRead_ / total);
     }
@@ -26,14 +30,14 @@ export class FileLineReader {
         this.initialized_ = true;
 
         /** ファイル名から zstd かどうかを判定 */
-        if (/\.(zst|zstd)(?:\.txt)?$/i.test(this.file_.name)) {
+        if (/\.(zst|zstd)(?:\.txt)?$/i.test(this.fileName_)) {
             this.isZstd_ = true;
-            this.reader_ = getFZSTD_Reader(this.file_, (bytes) => {
+            this.reader_ = getFZSTD_Reader(this.stream_, this.fileName_, this.fileSize_, (bytes) => {
                 this.bytesRead_ += bytes;
             });
         }
         else {
-            this.reader_ = this.file_.stream().getReader();
+            this.reader_ = this.stream_.getReader();
         }
     }
 
@@ -60,7 +64,7 @@ export class FileLineReader {
             const { done, value } = await this.reader_.read();
             if (done) {
                 // 終端で進捗を 100%
-                this.bytesRead_ = this.file_.size;
+                this.bytesRead_ = this.fileSize_;
                 if (this.buffer_.length > 0) {
                     const line = this.buffer_;
                     this.buffer_ = '';
