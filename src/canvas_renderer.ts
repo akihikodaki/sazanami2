@@ -140,11 +140,14 @@ class CanvasRenderer {
         this.clear(canvasCtx, renderCtx);
 
         if (!dataView) return;
-        const plotHeight = height - this.MARGIN_BOTTOM_;
-        const plotWidth = width - this.MARGIN_LEFT_;
+
+        // プロット領域がサイズ０となると色々壊れるのでリターン
+        const plotHeight = Math.max(height - this.MARGIN_BOTTOM_, 0);
+        const plotWidth = Math.max(width - this.MARGIN_LEFT_, 0);
+        if (plotHeight <= 0 || plotWidth <= 0) return;
 
         // 表示セル数
-        const visibleCols = Math.ceil((width - this.MARGIN_LEFT_) / scaleX);
+        const visibleCols = Math.ceil(plotWidth / scaleX);
         const visibleRows = Math.ceil(plotHeight / scaleY);
 
         // グリッドの上限を設定
