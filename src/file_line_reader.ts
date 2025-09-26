@@ -1,5 +1,12 @@
 import getFZSTD_Reader from "./zstd_reader"
 
+export interface FileLineReaderOptions {
+    file?: File;
+    stream?: ReadableStream<Uint8Array>;
+    fileName?: string;
+    fileSize?: number;
+}
+
 export class FileLineReader {
     private reader_!: ReadableStreamDefaultReader<Uint8Array>;
     private decoder_ = new TextDecoder('utf-8');
@@ -9,13 +16,25 @@ export class FileLineReader {
     private initialized_ = false;
     private isZstd_ = false;
     private canceled_ = false;
+    
+    private stream_: ReadableStream<Uint8Array>;
+    private fileName_: string;
+    private fileSize_: number;
 
-    // file.stream() の返す ReadableStream とメタ情報を受け取る
-    constructor(
-        private stream_: ReadableStream<Uint8Array>,
-        private fileName_: string,
-        private fileSize_: number,
-    ) {}
+    constructor(options: FileLineReaderOptions) {
+        if (options.file) {
+            const file = options.file;
+            this.stream_ = file.stream() || new Response(file).body as ReadableStream<Uint8Array>;
+            this.fileName_ = file.name;
+            this.fileSize_ = file.size;
+        } else if (options.stream) {
+            this.stream_ = options.stream;
+            this.fileName_ = options.fileName ?? "unknown";
+            this.fileSize_ = options.fileSize ?? 0;
+        } else {
+            throw new Error("Either file or stream must be provided.");
+        }
+    }
 
     /** 現在までの読み取り割合（0〜1）。空ファイルは 1。 */
     getProgress(): number {

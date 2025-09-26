@@ -2,11 +2,12 @@
 import { Loader } from "./loader";
 import { ViewDefinition, DataView, inferViewDefinition } from "./data_view";
 import { Settings } from "./settings";
+import { FileLineReader } from "./file_line_reader";
 
 // ACTION は ACTION_END の直前に追加していく（CHANGE の開始値に影響するため）
 enum ACTION {
     FILE_LOAD_FROM_FILE_OBJECT,
-    FILE_LOAD_FROM_FILE_STREAM,
+    FILE_LOAD_FROM_FILE_LINE_READER,
     FILE_LOAD_FROM_URL,
     DIALOG_VERSION_OPEN,
     DIALOG_HELP_OPEN,
@@ -88,16 +89,17 @@ class Store {
         
         // ---------------- ファイルロード ----------------
         this.on(ACTION.FILE_LOAD_FROM_FILE_OBJECT, (file: File) => {
-            this.trigger(ACTION.FILE_LOAD_FROM_FILE_STREAM, file.stream(), file.name, file.size);
+            const reader = new FileLineReader({ file });
+            this.trigger(ACTION.FILE_LOAD_FROM_FILE_LINE_READER, reader);
         });
-        this.on(ACTION.FILE_LOAD_FROM_FILE_STREAM, (fileStream: ReadableStream<Uint8Array>, fileName: string, fileSize: number) => {
+        this.on(ACTION.FILE_LOAD_FROM_FILE_LINE_READER, (fileLineReader: FileLineReader) => {
             this.saveDefinition();
             // 新規ファイル読み込み時は ViewDefinition をリセット
             this.viewDef_ = null;
             this.trigger(CHANGE.FILE_LOADING_START);
 
             this.loader.load(
-                fileStream, fileName, fileSize,
+                fileLineReader,
                 (lines: number, elapsedMs: number) => {
                     // ロード完了
                     this.trigger(CHANGE.FILE_LOADING_END);
@@ -245,10 +247,11 @@ class Store {
                 const fileStream = resp.body;
                 const fileName = new URL(abs).pathname.split("/").pop() || "data";
                 const fileSize = parseInt(resp.headers.get("content-length") || "0", 10);
+                const reader = new FileLineReader({stream: fileStream, fileName, fileSize});
 
                 // 既存の読み込みフローへ
                 this.trigger(ACTION.LOG_ADD, `Loading from URL: ${abs}`);
-                this.trigger(ACTION.FILE_LOAD_FROM_FILE_STREAM, fileStream, fileName, fileSize);
+                this.trigger(ACTION.FILE_LOAD_FROM_FILE_LINE_READER, reader);
             } catch (e) {
                 console.error(e);
                 this.trigger(CHANGE.SHOW_MESSAGE_IN_STATUS_BAR, "Failed to fetch ?file= URL");

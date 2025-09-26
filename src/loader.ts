@@ -1,4 +1,4 @@
-import { FileLineReader } from "./file_line_reader";
+import { FileLineReader, FileLineReaderOptions } from "./file_line_reader";
 import { inferViewDefinition, ViewDefinition, DataView, isEqualViewDefinition } from "./data_view";
 
 // STRING_CODE は，同一の文字列に対して連続したコードを割り当てる
@@ -118,9 +118,7 @@ class Loader {
     }
 
     load(
-        fileStream: ReadableStream<Uint8Array>,
-        fileName: string,
-        fileSize: number,
+        reader: FileLineReader,
         finishCallback: (lines: number, elapsedMs: number) => void,
         formatDetected: () => void,
         progressCallback: (progress: number, lineNum: number) => void,
@@ -130,7 +128,6 @@ class Loader {
         this.reset();
         this.onFormatDetected_ = formatDetected;
         this.warningCallback_ = warningCallback;
-        let reader = new FileLineReader(fileStream, fileName, fileSize);
         this.reader_ = reader;
         this.startTime_ = (new Date()).getTime();
 
