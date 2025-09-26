@@ -5,6 +5,7 @@ export interface FileLineReaderOptions {
     stream?: ReadableStream<Uint8Array>;
     fileName?: string;
     fileSize?: number;
+    url?: string; 
 }
 
 export class FileLineReader {
@@ -17,6 +18,7 @@ export class FileLineReader {
     private isZstd_ = false;
     private canceled_ = false;
     
+    private url_?: string; // URL を保持
     private stream_: ReadableStream<Uint8Array>;
     private fileName_: string;
     private fileSize_: number;
@@ -27,6 +29,12 @@ export class FileLineReader {
             this.stream_ = file.stream() || new Response(file).body as ReadableStream<Uint8Array>;
             this.fileName_ = file.name;
             this.fileSize_ = file.size;
+        } else if (options.url) {
+            // fetch は非同期なので、ここではプレースホルダをセットし実際の fetch は init_() 内で行う
+            this.url_ = options.url;
+            this.stream_ = undefined as any;
+            this.fileName_ = new URL(options.url).pathname.split("/").pop() || "data";
+            this.fileSize_ = 0;
         } else if (options.stream) {
             this.stream_ = options.stream;
             this.fileName_ = options.fileName ?? "unknown";
@@ -48,17 +56,28 @@ export class FileLineReader {
         if (this.initialized_) return;
         this.initialized_ = true;
 
-        /** ファイル名から zstd かどうかを判定 */
+        if (this.url_) {
+            const resp = await fetch(this.url_, { cache: "no-cache" });
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            if (!resp.body) throw new Error("ReadableStream not supported");
+
+            this.stream_ = resp.body;
+            this.fileSize_ = parseInt(resp.headers.get("content-length") || "0", 10) || 0;
+        }
+
         if (/\.(zst|zstd)(?:\.txt)?$/i.test(this.fileName_)) {
             this.isZstd_ = true;
-            this.reader_ = getFZSTD_Reader(this.stream_, this.fileName_, this.fileSize_, (bytes) => {
-                this.bytesRead_ += bytes;
-            });
-        }
-        else {
+            this.reader_ = getFZSTD_Reader(
+                this.stream_,
+                this.fileName_,
+                this.fileSize_,
+                (bytes) => { this.bytesRead_ += bytes; }
+            );
+        } else {
             this.reader_ = this.stream_.getReader();
         }
     }
+
 
     /** 次の行を読み込む。トレイリング改行なし。EOF で null。 */
     private async readLine_(): Promise<string | null> {
