@@ -12,6 +12,7 @@ const App = () => {
         window.addEventListener("pagehide", (ev: PageTransitionEvent) => {
             storeRef.current.trigger(ACTION.SETTINGS_SAVE_REQUEST);
         });
+        storeRef.current.trigger(ACTION.FILE_LOAD_FROM_URL);    // URL パラメータからの自動読み込み試行
     }, []);
 
     const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {

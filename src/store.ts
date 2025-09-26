@@ -6,6 +6,7 @@ import { Settings } from "./settings";
 // ACTION は ACTION_END の直前に追加していく（CHANGE の開始値に影響するため）
 enum ACTION {
     FILE_LOAD,
+    FILE_LOAD_FROM_URL,
     DIALOG_VERSION_OPEN,
     DIALOG_HELP_OPEN,
     MOUSE_MOVE,
@@ -216,7 +217,44 @@ class Store {
             this.trigger(CHANGE.SHOW_MESSAGE_IN_STATUS_BAR, "View applied");
             this.trigger(CHANGE.CONTENT_UPDATED);
         });
-    }
+
+        // URL にファイルが渡されていたら，それをロード
+        const LoadFromURL = async () => {
+            // ?file= または #file= のどちらでも拾う
+            const search = new URLSearchParams(window.location.search);
+            let url = search.get("file");
+            if (!url && window.location.hash.startsWith("#file=")) {
+                url = decodeURIComponent(window.location.hash.slice("#file=".length));
+            }
+            if (!url) return;
+
+            try {
+                // 相対パス対応（<base> 未設定でも ok）
+                const abs = new URL(url, window.location.href).toString();
+
+                // fetch → Blob → File にする
+                const resp = await fetch(abs, { cache: "no-cache" });
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                const blob = await resp.blob();
+
+                // ファイル名は URL 末尾から推定
+                const fileName = new URL(abs).pathname.split("/").pop() || "data";
+                const file = new File([blob], fileName, {
+                    type: resp.headers.get("content-type") ?? "application/octet-stream",
+                });
+
+                // 既存の読み込みフローへ
+                this.trigger(ACTION.LOG_ADD, `Loading from URL: ${abs}`);
+                this.trigger(ACTION.FILE_LOAD, file);
+            } catch (e) {
+                console.error(e);
+                this.trigger(CHANGE.SHOW_MESSAGE_IN_STATUS_BAR, "Failed to fetch ?file= URL");
+                this.trigger(ACTION.LOG_ADD, `Auto-load failed: ${e}`);
+            }
+        };
+        this.on(ACTION.FILE_LOAD_FROM_URL, LoadFromURL);
+
+    } // constructor()
 
     on(event: CHANGE | ACTION, handler: (...args: any[]) => void): void {
         if (!(event in CHANGE || event in ACTION)) {

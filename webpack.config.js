@@ -83,6 +83,17 @@ module.exports = (env, argv) => {
         devServer: {
             hot: false,
             liveReload: true,
+
+            static: [
+                // work ディレクトリを /work に公開
+                {
+                    directory: path.resolve(__dirname, "work"),
+                    publicPath: "/work",
+                    // ブラウザから /work/ を開いたときに一覧を出す
+                    serveIndex: true,
+                    watch: true,
+                },
+            ],
         },
     };
 };
