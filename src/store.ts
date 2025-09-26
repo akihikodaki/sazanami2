@@ -239,17 +239,16 @@ class Store {
                 // fetch → Blob → File にする
                 const resp = await fetch(abs, { cache: "no-cache" });
                 if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-                const blob = await resp.blob();
+                if (!resp.body) throw new Error("ReadableStream not supported");
 
                 // ファイル名は URL 末尾から推定
+                const fileStream = resp.body;
                 const fileName = new URL(abs).pathname.split("/").pop() || "data";
-                const file = new File([blob], fileName, {
-                    type: resp.headers.get("content-type") ?? "application/octet-stream",
-                });
+                const fileSize = parseInt(resp.headers.get("content-length") || "0", 10);
 
                 // 既存の読み込みフローへ
                 this.trigger(ACTION.LOG_ADD, `Loading from URL: ${abs}`);
-                this.trigger(ACTION.FILE_LOAD_FROM_FILE_OBJECT, file);
+                this.trigger(ACTION.FILE_LOAD_FROM_FILE_STREAM, fileStream, fileName, fileSize);
             } catch (e) {
                 console.error(e);
                 this.trigger(CHANGE.SHOW_MESSAGE_IN_STATUS_BAR, "Failed to fetch ?file= URL");
