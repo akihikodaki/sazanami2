@@ -225,40 +225,20 @@ class Store {
         });
 
         // URL にファイルが渡されていたら，それをロード
-        const LoadFromURL = async () => {
-            // ?file= または #file= のどちらでも拾う
-            const search = new URLSearchParams(window.location.search);
-            let url = search.get("file");
-            if (!url && window.location.hash.startsWith("#file=")) {
-                url = decodeURIComponent(window.location.hash.slice("#file=".length));
-            }
+        this.on(ACTION.FILE_LOAD_FROM_URL, async (url: string) => {
             if (!url) return;
 
             try {
-                // 相対パス対応（<base> 未設定でも ok）
-                const abs = new URL(url, window.location.href).toString();
-
-                // fetch → Blob → File にする
-                const resp = await fetch(abs, { cache: "no-cache" });
-                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-                if (!resp.body) throw new Error("ReadableStream not supported");
-
-                // ファイル名は URL 末尾から推定
-                const fileStream = resp.body;
-                const fileName = new URL(abs).pathname.split("/").pop() || "data";
-                const fileSize = parseInt(resp.headers.get("content-length") || "0", 10);
-                const reader = new FileLineReader({stream: fileStream, fileName, fileSize});
-
+                const reader = new FileLineReader({url});
                 // 既存の読み込みフローへ
-                this.trigger(ACTION.LOG_ADD, `Loading from URL: ${abs}`);
+                this.trigger(ACTION.LOG_ADD, `Loading from URL: ${url}`);
                 this.trigger(ACTION.FILE_LOAD_FROM_FILE_LINE_READER, reader);
             } catch (e) {
                 console.error(e);
                 this.trigger(CHANGE.SHOW_MESSAGE_IN_STATUS_BAR, "Failed to fetch ?file= URL");
                 this.trigger(ACTION.LOG_ADD, `Auto-load failed: ${e}`);
             }
-        };
-        this.on(ACTION.FILE_LOAD_FROM_URL, LoadFromURL);
+        });
 
     } // constructor()
 

@@ -9,10 +9,38 @@ const App = () => {
     const storeRef = useRef(new Store());
     const divRef = useRef<HTMLDivElement>(null);
     useEffect(() => { // マウント時
-        window.addEventListener("pagehide", (ev: PageTransitionEvent) => {
+
+        // ページ離脱時に設定保存
+        const onPageHide = (ev: PageTransitionEvent) => {
             storeRef.current.trigger(ACTION.SETTINGS_SAVE_REQUEST);
-        });
-        storeRef.current.trigger(ACTION.FILE_LOAD_FROM_URL);    // URL パラメータからの自動読み込み試行
+        };
+        window.addEventListener("pagehide", onPageHide); 
+
+        // URL からのファイル読み出し
+        const getTargetFileURL = (): string | null => {
+            const search = new URLSearchParams(window.location.search);
+            let url = search.get("file");
+            if (!url && window.location.hash.startsWith("#file=")) {
+                url = decodeURIComponent(window.location.hash.slice("#file=".length));
+            }
+            if (!url) return "";
+            const abs = new URL(url, window.location.href).toString();  // 相対パス対応（<base> 未設定でも ok）
+            return abs;
+        }
+        const loadFromLocation = () => {
+            storeRef.current.trigger(ACTION.FILE_LOAD_FROM_URL, getTargetFileURL());    // URL パラメータからの自動読み込み試行
+        }
+        window.addEventListener("hashchange", loadFromLocation);    // ハッシュ変更で再ロード
+        window.addEventListener("popstate", loadFromLocation);  // 履歴APIで ?file= を pushState/replaceState している場合の戻る/進む対応
+        loadFromLocation(); // 初回ロード
+
+        // クリーンアップ
+        return () => {
+            window.removeEventListener("pagehide", onPageHide);
+            window.removeEventListener("hashchange", loadFromLocation);
+            window.removeEventListener("popstate", loadFromLocation);
+        };
+
     }, []);
 
     const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
