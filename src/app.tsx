@@ -20,7 +20,7 @@ const App = () => {
         divRef.current!.style.cursor = "default";
         const file = e.dataTransfer.files[0];
         if (file) {
-            storeRef.current.trigger(ACTION.FILE_LOAD, file);
+            storeRef.current.trigger(ACTION.FILE_LOAD_FROM_FILE_OBJECT, file);
         }
     };
     const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => e.preventDefault();

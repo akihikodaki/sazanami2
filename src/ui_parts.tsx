@@ -23,7 +23,7 @@ const ToolBar = (props: {store: Store;}) => {
             // ファイルを読み込む
             const [fileHandle]: [FileSystemFileHandle] = await (window as any).showOpenFilePicker();
             const file = await fileHandle.getFile();
-            store.trigger(ACTION.FILE_LOAD, file);
+            store.trigger(ACTION.FILE_LOAD_FROM_FILE_OBJECT, file);
          }
          catch (error) {
             store.trigger(ACTION.LOG_ADD, "Error opening file:" + error);

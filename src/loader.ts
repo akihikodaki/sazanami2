@@ -118,7 +118,9 @@ class Loader {
     }
 
     load(
-        file: File,
+        fileStream: ReadableStream<Uint8Array>,
+        fileName: string,
+        fileSize: number,
         finishCallback: (lines: number, elapsedMs: number) => void,
         formatDetected: () => void,
         progressCallback: (progress: number, lineNum: number) => void,
@@ -128,7 +130,7 @@ class Loader {
         this.reset();
         this.onFormatDetected_ = formatDetected;
         this.warningCallback_ = warningCallback;
-        let reader = new FileLineReader(file.stream(), file.name, file.size);
+        let reader = new FileLineReader(fileStream, fileName, fileSize);
         this.reader_ = reader;
         this.startTime_ = (new Date()).getTime();
 
