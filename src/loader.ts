@@ -66,6 +66,8 @@ class Loader {
     private numRows_: number = 0;
     private numWarning: number = 0;
 
+    private separatorIsTab_: boolean = true;
+
     private headers_: string[] = [];
     private headerIndex_: { [column: string]: number } = {};
 
@@ -158,7 +160,13 @@ class Loader {
 
     // ヘッダー行設定
     private parseHeader_(line: string): void {
-        let values = line.split("\t");
+        // tab かカンマで区切られたヘッダーを想定
+        line = line.trim();
+        let commaValues = line.split(",");
+        let tabValues = line.split("\t");
+        this.separatorIsTab_ = (tabValues.length >= commaValues.length);
+
+        let values = this.separatorIsTab_ ? tabValues : commaValues;
         this.headers_ = values;
 
         // データ列とタイプ検出用変数の初期化
@@ -179,7 +187,7 @@ class Loader {
         if (this.lineNum === 1) {
             this.parseHeader_(line);
         } else {
-            let values = line.split("\t");
+            let values = this.separatorIsTab_ ? line.split("\t") : line.split(",");
 
             // カラムに過不足がある場合
             if (values.length > this.headers_.length) {
