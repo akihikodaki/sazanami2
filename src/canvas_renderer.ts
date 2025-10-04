@@ -191,20 +191,18 @@ class CanvasRenderer {
 
         let colorPalette = dataView.getPalette();
 
-        for (let i = startIdx; i < endIdx; i += step) {
+        for (let i = startIdx; i <= endIdx; i += step) {
             const yVal = dataView.getY(i);
-            if (yVal == 0) {
-                continue;
-            }
-            const xVal = dataView.getX(i);
-            const x = this.MARGIN_LEFT_ + xVal * scaleX - offsetX;
             const y = yVal * scaleY - offsetY;
-            const c = colorPalette[dataView.getColorIndex(i)];
-
-            if (x + pxW < this.MARGIN_LEFT_) continue;
-            if (x >= width) continue;
             if (y + pxH < 0) continue;
             if (y >= plotHeight) continue;
+
+            const xVal = dataView.getX(i);
+            const x = this.MARGIN_LEFT_ + xVal * scaleX - offsetX;
+            if (x + pxW < this.MARGIN_LEFT_) continue;
+            if (x >= width) continue;
+
+            const c = colorPalette[dataView.getColorIndex(i)];
 
             this.rectRenderer.fillRect(x, y, pxW, pxH, c);
 
