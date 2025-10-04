@@ -63,6 +63,7 @@ class ColumnBuffer {
 
 class Loader {
     private lineNum: number = 1;
+    private numRows_: number = 0;
     private numWarning: number = 0;
 
     private headers_: string[] = [];
@@ -98,6 +99,7 @@ class Loader {
 
     reset() {
         this.lineNum = 1;
+        this.numRows_ = 0;
         this.numWarning = 0;
         this.headers_ = [];
         this.headerIndex_ = {};
@@ -189,6 +191,9 @@ class Loader {
                 }
                 values = values.slice(0, this.headers_.length);
             }
+            if (values.length == 0) {
+                return;
+            }
             while (values.length < this.headers_.length) {
                 values.push("");    // 不足分は空文字で埋める
             }
@@ -208,6 +213,8 @@ class Loader {
                     this.pushValue(index, val);
                 });
             }
+
+            this.numRows_++;
         }
     }
 
@@ -360,9 +367,7 @@ class Loader {
     }
 
     public get numRows(): number {
-        // this.lineNum は次に読み込まれる行番号なので、
-        // 実際に読み込んだ行数は lineNum - 1
-        return this.lineNum - 1;
+        return this.numRows_;
     }
 
     public GetDataView(dataViewDef: ViewDefinition): DataView {
