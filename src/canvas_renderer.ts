@@ -22,12 +22,13 @@ class RendererContext {
 
     dataView: DataView | null = null;
 
+}
+
+class GridMap {
     // 描画されたピクセルのインデックスを保持
     // マウスオーバー時に使用
     drawnIndex: Int32Array | null = null; 
 }
-
-
 
 class CanvasRenderer {
     MARGIN_LEFT_ = 50;
@@ -127,7 +128,7 @@ class CanvasRenderer {
     }
 
 
-    draw(canvas: HTMLCanvasElement, renderCtx: RendererContext) {
+    draw(canvas: HTMLCanvasElement, gridMap: GridMap, renderCtx: RendererContext) {
         let canvasCtx = canvas.getContext("2d")!;
         if (!canvasCtx) return;
 
@@ -169,11 +170,11 @@ class CanvasRenderer {
         const endIdx   = dataView.getEndIdx(xStart + visibleCols - 1, yStart + visibleRows - 1);
 
         // drawnIndex を gridCols × gridRows で初期化
-        if (renderCtx.drawnIndex?.length != gridCols * gridRows) {
-            renderCtx.drawnIndex = new Int32Array(gridCols * gridRows).fill(-1);
+        if (gridMap.drawnIndex?.length != gridCols * gridRows) {
+            gridMap.drawnIndex = new Int32Array(gridCols * gridRows).fill(-1);
         }
         else {
-            renderCtx.drawnIndex.fill(-1);
+            gridMap.drawnIndex.fill(-1);
         }
 
         const gridColRatio = gridCols / visibleCols;
@@ -215,7 +216,7 @@ class CanvasRenderer {
                 const gridCol = Math.floor(col * gridColRatio);
                 const gridRow = Math.floor(row * gridRowRatio);
                 const cellIndex = gridRow * gridCols + gridCol;
-                renderCtx.drawnIndex[cellIndex] = i;
+                gridMap.drawnIndex[cellIndex] = i;
             }
             // モアレを軽減するために適当にノイズを乗せる
             if (step > 1) {
@@ -280,9 +281,9 @@ class CanvasRenderer {
     };
 
     // マウス位置（CSSピクセル）に対応するデータの文字列を取得
-    getText(mouseX: number, mouseY: number, renderCtx: RendererContext, loader: Loader): string {
+    getText(mouseX: number, mouseY: number, gridMap: GridMap, renderCtx: RendererContext, loader: Loader): string {
 
-        if (!renderCtx.dataView || !renderCtx.drawnIndex) {
+        if (!renderCtx.dataView || !gridMap.drawnIndex) {
             return "";
         }
 
@@ -311,7 +312,7 @@ class CanvasRenderer {
             const gridCol = Math.floor(col * gridCols / visibleCols);
             const gridRow = Math.floor(row * gridRows / visibleRows);
             const cellIndex = gridRow * gridCols + gridCol;
-            recordIndex = renderCtx.drawnIndex[cellIndex] ?? -1;
+            recordIndex = gridMap.drawnIndex[cellIndex] ?? -1;
         }
 
         // 全 columns を走査して "列名: 値, " の文字列を組み立て
@@ -383,4 +384,4 @@ class CanvasRenderer {
     }
 }
 
-export {CanvasRenderer, RendererContext};
+export {CanvasRenderer, RendererContext, GridMap};

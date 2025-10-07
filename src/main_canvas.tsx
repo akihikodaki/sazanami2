@@ -1,10 +1,11 @@
 import React, { useRef, useEffect, createContext, useContext } from "react";
 import Store, { ACTION, CHANGE } from "./store";
-import { CanvasRenderer, RendererContext } from "./canvas_renderer";
+import { CanvasRenderer, RendererContext, GridMap } from "./canvas_renderer";
 
 const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
     const rendererRef = useRef<CanvasRenderer>(new CanvasRenderer());
     const contextRef = useRef<RendererContext>(new RendererContext());
+    const gridMapRef = useRef<GridMap>(new GridMap());
     const divRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -41,6 +42,9 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
     useEffect(() => {
         const renderer = rendererRef.current;
         const renderCtx = contextRef.current;
+        const gridMap = gridMapRef.current;
+        const draw = () => renderer.draw(canvasRef.current!, gridMap, renderCtx);
+
         const canvas = canvasRef.current!;
         const div = divRef.current!;
 
@@ -88,7 +92,7 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
                     stepper(divisions);
                 }
                 if (target > applied) {
-                    renderer.draw(canvas, renderCtx);
+                    draw();
                     applied = target;
                 }
 
@@ -99,7 +103,7 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
                     for (let i = applied; i < divisions; i++) {
                         stepper(divisions);
                     }
-                    renderer.draw(canvas, renderCtx);
+                    draw();
                     zoomRafIdRef.current = null;
                 }
             };
@@ -134,7 +138,7 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
                 // 絶対位置を補間して直接設定（差分適用しない）
                 renderCtx.offsetX = fromX + totalDx * eased;
                 renderCtx.offsetY = fromY + totalDy * eased;
-                renderer.draw(canvas, renderCtx);
+                draw();
 
                 if (t < 1) {
                     panRafIdRef.current = requestAnimationFrame(tick);
@@ -142,7 +146,7 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
                     // 最終位置にスナップ（浮動小数の誤差吸収）
                     renderCtx.offsetX = fromX + totalDx;
                     renderCtx.offsetY = fromY + totalDy;
-                    renderer.draw(canvas, renderCtx);
+                    draw();
                     panRafIdRef.current = null;
                 }
             };
@@ -239,7 +243,7 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
                 // 中心を記録
                 touchRef.current.lastCenter = center;
 
-                renderer.draw(canvas, renderCtx);
+                draw();
             } else if (e.touches.length === 1 && touchRef.current.inSwipe) {
                 // 1本指の移動操作（即時パン）
                 const current = getSingleTouchPos(e.touches[0]);
@@ -252,7 +256,7 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
                 renderCtx.offsetY -= dy;
 
                 touchRef.current.lastPos = current;
-                renderer.draw(canvas, renderCtx);
+                draw();
             }
         };
 
@@ -290,7 +294,7 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
             renderCtx.width = width;
             renderCtx.height = height;
 
-            renderer.draw(canvas, renderCtx);
+            draw();
         };
 
         // Wheel handler
@@ -405,11 +409,11 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
                 renderCtx.offsetY -= dy;
                 lastX = e.clientX;
                 lastY = e.clientY;
-                renderer.draw(canvas, renderCtx);
+                draw();
                 return;
             }
 
-            if (!renderCtx.dataView || !renderCtx.drawnIndex) {
+            if (!renderCtx.dataView || !gridMap.drawnIndex) {
                 store.trigger(ACTION.MOUSE_MOVE, "");
                 return;
             }
@@ -419,7 +423,7 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
             const mouseX = e.clientX - rect.left;
             const mouseY = e.clientY - rect.top;
 
-            const payload = renderer.getText(mouseX, mouseY, renderCtx, store.loader);
+            const payload = renderer.getText(mouseX, mouseY, gridMap, renderCtx, store.loader);
             store.trigger(ACTION.MOUSE_MOVE, payload);
         };
 
@@ -452,7 +456,7 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
             handleResize();
             const canvasCtx = canvas.getContext("2d")!;
             renderer.clear(canvasCtx, renderCtx);
-            renderCtx.drawnIndex = null;    // ここでクリアしておかないと，描画前にマウスオーバーで参照されてしまう
+            gridMap.drawnIndex = null;    // ここでクリアしておかないと，描画前にマウスオーバーで参照されてしまう
         };
         const onFileFormatDetected = () => {
             // 初回表示で範囲外だったらリセット
@@ -475,7 +479,7 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
             }
             renderCtx.dataView = store.loader.GetDataView(store.viewDef);
             renderCtx.numRows = store.loader.numRows;
-            renderer.draw(canvas, renderCtx);
+            draw();
         };
         store.on(CHANGE.FILE_LOADED, onContentUpdated);
         store.on(CHANGE.FILE_LOADING_START, onFileLoadStarted);
@@ -483,7 +487,7 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
         store.on(CHANGE.CONTENT_UPDATED, onContentUpdated);
         store.on(CHANGE.CANVAS_FIT, () => {
             renderer.fitScaleToData(renderCtx, 1.0);
-            renderer.draw(canvas, renderCtx);
+            draw();
         });
 
         // Cleanup
