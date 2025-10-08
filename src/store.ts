@@ -3,6 +3,7 @@ import { Loader } from "./loader";
 import { ViewDefinition, DataView, inferViewDefinition } from "./data_view";
 import { Settings } from "./settings";
 import { FileLineReader } from "./file_line_reader";
+import { RendererContext } from "./canvas_renderer";
 
 // ACTION は ACTION_END の直前に追加していく（CHANGE の開始値に影響するため）
 enum ACTION {
@@ -22,6 +23,7 @@ enum ACTION {
     LOG_CLEAR,                // ログをクリア
     SHOW_LOG_OVERLAY,       // デバッグオーバーレイの表示/非表示
     SETTINGS_SAVE_REQUEST,  // 設定保存リクエスト
+    UPDATE_RENDERER_CONTEXT,    // RendererContext の更新
     ACTION_END, // 末尾
 };
 
@@ -57,9 +59,13 @@ class Store {
     // Loader（TSV 読み込み・列アクセス）
     loader: Loader;
 
+    // レンダラのコンテクスト
+    private renderCtx_: RendererContext = new RendererContext();
+    get renderCtx(): Readonly<RendererContext> { return this.renderCtx_; }
+
     // 現在キャンバスに適用中の View
     viewDef_: ViewDefinition | null = null;
-    get viewDef() { return this.viewDef_; }
+    get viewDef(): Readonly<ViewDefinition | null> { return this.viewDef_; }
 
     // Settings panel を表示するかどうか
     showSettings: boolean = true;
@@ -69,6 +75,7 @@ class Store {
 
     // Store 内部に簡易ログを保持（公開メソッドなし）
     private logs: string[] = [];
+
 
     // アプリ設定
     settings = new Settings();
@@ -172,6 +179,10 @@ class Store {
         this.on(ACTION.SETTINGS_SAVE_REQUEST, () => {
             this.saveDefinition();
             this.settings.save();
+        });
+
+        this.on(ACTION.UPDATE_RENDERER_CONTEXT, (renderCtx: RendererContext) => {
+            this.renderCtx_ = renderCtx.clone();
         });
 
         // data_view.ts のバリデーションを用いて厳密チェックし、初期化が通るかを確認する

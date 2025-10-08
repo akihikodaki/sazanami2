@@ -378,7 +378,10 @@ class Loader {
         return this.numRows_;
     }
 
-    public GetDataView(dataViewDef: ViewDefinition): DataView {
+    public GetDataView(dataViewDef: ViewDefinition | null): DataView | null {
+        if (dataViewDef === null) 
+            return null;
+
         if (!this.dataView_ || this.dataViewInvalidated_  || 
             (dataViewDef && !isEqualViewDefinition(dataViewDef, this.dataView_.definition))
         ) {

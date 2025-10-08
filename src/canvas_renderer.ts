@@ -20,8 +20,11 @@ class RendererContext {
 
     numRows = 0;                       // number of rows in the data
 
-    dataView: DataView | null = null;
-
+    clone(): RendererContext {
+        const cloned = structuredClone(this);
+        Object.setPrototypeOf(cloned, RendererContext.prototype);
+        return cloned;
+    }
 }
 
 class GridMap {
@@ -128,13 +131,13 @@ class CanvasRenderer {
     }
 
 
-    draw(canvas: HTMLCanvasElement, gridMap: GridMap, renderCtx: RendererContext) {
+    draw(canvas: HTMLCanvasElement, gridMap: GridMap, dataView: DataView | null, renderCtx: RendererContext) {
         let canvasCtx = canvas.getContext("2d")!;
         if (!canvasCtx) return;
 
         // let startTime = (new Date()).getTime();
 
-        const { width, height, dataView, offsetX, offsetY } = renderCtx;
+        const { width, height, offsetX, offsetY } = renderCtx;
         const scaleX = renderCtx.scaleX;
         const scaleY = renderCtx.scaleY;
 
@@ -281,9 +284,9 @@ class CanvasRenderer {
     };
 
     // マウス位置（CSSピクセル）に対応するデータの文字列を取得
-    getText(mouseX: number, mouseY: number, gridMap: GridMap, renderCtx: RendererContext, loader: Loader): string {
+    getText(mouseX: number, mouseY: number, gridMap: GridMap, dataView: DataView, renderCtx: RendererContext, loader: Loader): string {
 
-        if (!renderCtx.dataView || !gridMap.drawnIndex) {
+        if (!dataView || !gridMap.drawnIndex) {
             return "";
         }
 
@@ -334,16 +337,16 @@ class CanvasRenderer {
      * データ全体（X: 0..maxX-1, Y: minY..maxY）がプロット領域に収まるように
      * scaleXLog / scaleYLog を設定し、オフセットもリセットする。
      */
-    fitScaleToData(renderCtx: RendererContext, paddingRatio = 1.0) {
-        if (!renderCtx.dataView) return;
+    fitScaleToData(dataView: DataView | null, renderCtx: RendererContext, paddingRatio = 1.0) {
+        if (!dataView) return;
 
         const { width, height } = renderCtx;
         const plotWidth  = Math.max(1, width  - this.MARGIN_LEFT_);
         const plotHeight = Math.max(1, height - this.MARGIN_BOTTOM_);
 
-        const maxX = Math.max(0, renderCtx.dataView.getMaxX());
-        const maxY = Math.max(0, renderCtx.dataView.getMaxY());
-        const minY = Math.max(0, renderCtx.dataView.getMinY ? renderCtx.dataView.getMinY() : 0);
+        const maxX = Math.max(0, dataView.getMaxX());
+        const maxY = Math.max(0, dataView.getMaxY());
+        const minY = Math.max(0, dataView.getMinY ? dataView.getMinY() : 0);
 
         // X方向は 0..maxX-1 のセル幅
         const dataPixelWidth  = Math.max(1, maxX) * paddingRatio;
