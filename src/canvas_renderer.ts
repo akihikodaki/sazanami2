@@ -4,28 +4,31 @@ import { RectRendererSoft, RectRendererWebGL } from "./rect_renderer";
 /**
  * Context holding canvas rendering state and loaded data
  */
-class RendererContext {
-    // canvasCtx!: CanvasRenderingContext2D;
-    width = 0;
-    height = 0;
-    offsetX = 0;                       // horizontal scroll/offset
-    offsetY = 0;                       // vertical scroll offset
+type RendererContext = Readonly<{
+    width: number;
+    height: number;
+    offsetX: number;
+    offsetY: number;
+    scaleXLog: number;
+    scaleYLog: number;
+    numRows: number;
+}>;
 
-    // スケール対数
-    scaleXLog = Math.log(20);          // horizontal zoom scale (log)
-    scaleYLog = 0;                     // vertical zoom scale (log)
+// 既定値
+const INITIAL_RENDERER_CONTEXT: RendererContext = {
+    width: 0,
+    height: 0,
+    offsetX: 0,
+    offsetY: 0,
+    scaleXLog: Math.log(20),
+    scaleYLog: 0,
+    numRows: 0,
+};
 
-    get scaleX() { return Math.exp(this.scaleXLog); }
-    get scaleY() { return Math.exp(this.scaleYLog); }
+// ヘルパ
+const scaleX = (scaleXLog: number) => Math.exp(scaleXLog);
+const scaleY = (scaleYLog: number) => Math.exp(scaleYLog);
 
-    numRows = 0;                       // number of rows in the data
-
-    clone(): RendererContext {
-        const cloned = structuredClone(this);
-        Object.setPrototypeOf(cloned, RendererContext.prototype);
-        return cloned;
-    }
-}
 
 class GridMap {
     // 描画されたピクセルのインデックスを保持
@@ -60,52 +63,64 @@ class CanvasRenderer {
         zoomIn: boolean,
         divisions: number,
         axes: { x?: boolean; y?: boolean }  // どの軸をズームするか
-    ) {
+    ): RendererContext {
         const base = this.ZOOM_STEP_LOG_;
         const step = base / Math.max(1, Math.floor(divisions));
         const dir = zoomIn ? 1 : -1;
 
         // 変更前スケール（オフセット更新で使用）
-        const prevX = renderCtx.scaleX;
-        const prevY = renderCtx.scaleY;
+        const prevX = scaleX(renderCtx.scaleXLog);
+        const prevY = scaleY(renderCtx.scaleYLog);
 
-        // 1) ログスケールの更新
-        if (axes.x) renderCtx.scaleXLog += dir * step;
-        if (axes.y) renderCtx.scaleYLog += dir * step;
+        // 1) ログスケールの更新（イミュータブル更新のため一旦次状態を作る）
+        const nextScaleXLog = axes.x ? renderCtx.scaleXLog + dir * step : renderCtx.scaleXLog;
+        const nextScaleYLog = axes.y ? renderCtx.scaleYLog + dir * step : renderCtx.scaleYLog;
 
         // 変更後スケール
-        const newX = renderCtx.scaleX;
-        const newY = renderCtx.scaleY;
+        const newX = scaleX(nextScaleXLog);
+        const newY = scaleY(nextScaleYLog);
 
         // 2) マウス位置を基準にオフセット調整
+        let nextOffsetX = renderCtx.offsetX;
+        let nextOffsetY = renderCtx.offsetY;
+
         if (axes.x) {
             const relX = mouseX - this.MARGIN_LEFT_ + renderCtx.offsetX;
             // prevX が 0 に極端に近い場合のガード（念のため）
             const safePrevX = Math.abs(prevX) < 1e-12 ? 1e-12 : prevX;
-            renderCtx.offsetX = relX * (newX / safePrevX) - (mouseX - this.MARGIN_LEFT_);
+            nextOffsetX = relX * (newX / safePrevX) - (mouseX - this.MARGIN_LEFT_);
         }
         if (axes.y) {
             const relY = mouseY + renderCtx.offsetY;
             const safePrevY = Math.abs(prevY) < 1e-12 ? 1e-12 : prevY;
-            renderCtx.offsetY = relY * (newY / safePrevY) - mouseY;
+            nextOffsetY = relY * (newY / safePrevY) - mouseY;
         }
+
+        // 新しいコンテキストを返す（イミュータブル）
+        return {
+            ...renderCtx,
+            scaleXLog: nextScaleXLog,
+            scaleYLog: nextScaleYLog,
+            offsetX: nextOffsetX,
+            offsetY: nextOffsetY,
+        };
     }
 
     // ===== ラッパー関数（既存API互換） =====
 
     // uniform zoom（縦横両方：対数スケール）
-    zoomUniform(renderCtx: RendererContext, mouseX: number, mouseY: number, zoomIn: boolean, divs: number=1) {
-        this.applyZoom(renderCtx, mouseX, mouseY, zoomIn, divs, { x: true, y: true });
+    zoomUniform(renderCtx: RendererContext, mouseX: number, mouseY: number, zoomIn: boolean, divs: number = 1): RendererContext {
+        return this.applyZoom(renderCtx, mouseX, mouseY, zoomIn, divs, { x: true, y: true });
     }
 
     // horizontal-only zoom（対数スケール）
-    zoomHorizontal(renderCtx: RendererContext, mouseX: number, mouseY: number, zoomIn: boolean, divs: number=1) {
-        this.applyZoom(renderCtx, mouseX, mouseY, zoomIn, divs, { x: true });
+    zoomHorizontal(renderCtx: RendererContext, mouseX: number, mouseY: number, zoomIn: boolean, divs: number = 1): RendererContext {
+        return this.applyZoom(renderCtx, mouseX, mouseY, zoomIn, divs, { x: true });
     }
 
     // vertical-only zoom（対数スケール）
-    zoomVertical(renderCtx: RendererContext, mouseX: number, mouseY: number, zoomIn: boolean, divs: number=1) {
-        this.applyZoom(renderCtx, mouseX, mouseY, zoomIn, divs, { y: true });
+    zoomVertical(renderCtx: RendererContext, mouseX: number, mouseY: number, zoomIn: boolean, divs: number = 1): RendererContext {
+        return this.applyZoom(renderCtx, mouseX, mouseY, zoomIn, divs, { y: true });
     }
 
     // 10進で上位2桁を 1, 2, 5, 10 のいずれかに丸めて「見やすい数値」を返す
@@ -138,8 +153,8 @@ class CanvasRenderer {
         // let startTime = (new Date()).getTime();
 
         const { width, height, offsetX, offsetY } = renderCtx;
-        const scaleX = renderCtx.scaleX;
-        const scaleY = renderCtx.scaleY;
+        const scaleXVal = scaleX(renderCtx.scaleXLog);
+        const scaleYVal = scaleY(renderCtx.scaleYLog);
 
         this.clear(canvasCtx, renderCtx);
 
@@ -151,8 +166,8 @@ class CanvasRenderer {
         if (plotHeight <= 0 || plotWidth <= 0) return;
 
         // 表示セル数
-        const visibleCols = Math.ceil(plotWidth / scaleX);
-        const visibleRows = Math.ceil(plotHeight / scaleY);
+        const visibleCols = Math.ceil(plotWidth / scaleXVal);
+        const visibleRows = Math.ceil(plotHeight / scaleYVal);
 
         // グリッドの上限を設定
         const MAX_RES = 128;
@@ -160,15 +175,15 @@ class CanvasRenderer {
         const gridRows = Math.min(visibleRows, MAX_RES);
 
         // 1ピクセルに描画される論理高さ
-        const ratioY = 1 / scaleY; 
+        const ratioY = 1 / scaleYVal; 
 
         // データ描画用ピクセルサイズ
-        const pxW = Math.max(scaleX, 1);
-        const pxH = Math.max(scaleY, 0.5);
+        const pxW = Math.max(scaleXVal, 1);
+        const pxH = Math.max(scaleYVal, 0.5);
 
         // 描画セルの start/end インデックス
-        const xStart = Math.floor((offsetX - this.MARGIN_LEFT_) / scaleX);
-        const yStart = Math.floor(offsetY / scaleY);
+        const xStart = Math.floor((offsetX - this.MARGIN_LEFT_) / scaleXVal);
+        const yStart = Math.floor(offsetY / scaleYVal);
         const startIdx = dataView.getStartIdx(xStart, yStart);
         const endIdx   = dataView.getEndIdx(xStart + visibleCols - 1, yStart + visibleRows - 1);
 
@@ -191,18 +206,18 @@ class CanvasRenderer {
         if (endIdx - startIdx < 100000) step = 1; // 少ない場合は間引かない
 
         // データ描画＆インデックス記録
-        this.rectRenderer.beginRawMode(canvas, scaleY);
+        this.rectRenderer.beginRawMode(canvas, scaleYVal);
 
         let colorPalette = dataView.getPalette();
 
         for (let i = startIdx; i <= endIdx; i += step) {
             const yVal = dataView.getY(i);
-            const y = yVal * scaleY - offsetY;
+            const y = yVal * scaleYVal - offsetY;
             if (y + pxH < 0) continue;
             if (y >= plotHeight) continue;
 
             const xVal = dataView.getX(i);
-            const x = this.MARGIN_LEFT_ + xVal * scaleX - offsetX;
+            const x = this.MARGIN_LEFT_ + xVal * scaleXVal - offsetX;
             if (x + pxW < this.MARGIN_LEFT_) continue;
             if (x >= width) continue;
 
@@ -248,11 +263,11 @@ class CanvasRenderer {
         canvasCtx.textAlign = 'right';
         canvasCtx.textBaseline = 'middle';
         const pixelMinSpacingY = 40;
-        const rawDataSpacingY = pixelMinSpacingY / scaleY;
+        const rawDataSpacingY = pixelMinSpacingY / scaleYVal;
         let tickSpacingY = this.niceNum_(rawDataSpacingY);
         tickSpacingY = tickSpacingY < 1 ? 1 : tickSpacingY; // 最小値を 1 に設定
         for (let val = 0; val <= dataView.getMaxY(); val += tickSpacingY) {
-            const y = val * scaleY - offsetY;
+            const y = val * scaleYVal - offsetY;
             if (y < 0) continue;
             if (y > plotHeight) break;
             canvasCtx.strokeStyle = '#444';
@@ -268,12 +283,12 @@ class CanvasRenderer {
         canvasCtx.textAlign = 'center';
         canvasCtx.textBaseline = 'top';
         const pixelMinSpacingX = dataView.getMaxX() < 16 ? 10 : 40; // 数字が小さい場合は最小間隔を 10 に設定
-        const rawDataSpacingX = pixelMinSpacingX / scaleX;
+        const rawDataSpacingX = pixelMinSpacingX / scaleXVal;
         let tickSpacingX = this.niceNum_(rawDataSpacingX);
         tickSpacingX = tickSpacingX < 1 ? 1 : tickSpacingX; // 最小値を 1 に設定
         for (let i = 0; i < dataView.getMaxX(); i += tickSpacingX) {
             const val = i;
-            const x = this.MARGIN_LEFT_ + val * scaleX + (scaleX / 2) - offsetX;
+            const x = this.MARGIN_LEFT_ + val * scaleXVal + (scaleXVal / 2) - offsetX;
             if (x < 0) continue;
             if (x > plotWidth) break;
             canvasCtx.fillText(val.toString(), x, plotHeight + 3);
@@ -294,19 +309,21 @@ class CanvasRenderer {
         const plotHeight = renderCtx.height - this.MARGIN_BOTTOM_;
 
         // 可視セル数（カラム数・行数）
-        const visibleCols = Math.ceil((renderCtx.width - this.MARGIN_LEFT_) / renderCtx.scaleX);
-        const visibleRows = Math.ceil(plotHeight / renderCtx.scaleY);
+        const scaleXVal = scaleX(renderCtx.scaleXLog);
+        const scaleYVal = scaleY(renderCtx.scaleYLog);
+        const visibleCols = Math.ceil((renderCtx.width - this.MARGIN_LEFT_) / scaleXVal);
+        const visibleRows = Math.ceil(plotHeight / scaleYVal);
 
         // 最大解像度制限
         const MAX_RES = 128;
         const gridCols = Math.min(visibleCols, MAX_RES);
         const gridRows = Math.min(visibleRows, MAX_RES);
 
-        const xStart = Math.floor((renderCtx.offsetX - this.MARGIN_LEFT_) / renderCtx.scaleX);
-        const yStart = Math.floor(renderCtx.offsetY / renderCtx.scaleY);
+        const xStart = Math.floor((renderCtx.offsetX - this.MARGIN_LEFT_) / scaleXVal);
+        const yStart = Math.floor(renderCtx.offsetY / scaleYVal);
 
-        const xVal = Math.floor((mouseX - this.MARGIN_LEFT_ + renderCtx.offsetX) / renderCtx.scaleX);
-        const yVal = Math.floor((mouseY + renderCtx.offsetY) / renderCtx.scaleY);
+        const xVal = Math.floor((mouseX - this.MARGIN_LEFT_ + renderCtx.offsetX) / scaleXVal);
+        const yVal = Math.floor((mouseY + renderCtx.offsetY) / scaleYVal);
         const col = xVal - xStart;
         const row = yVal - yStart;
 
@@ -337,8 +354,8 @@ class CanvasRenderer {
      * データ全体（X: 0..maxX-1, Y: minY..maxY）がプロット領域に収まるように
      * scaleXLog / scaleYLog を設定し、オフセットもリセットする。
      */
-    fitScaleToData(dataView: DataView | null, renderCtx: RendererContext, paddingRatio = 1.0) {
-        if (!dataView) return;
+    fitScaleToData(dataView: DataView | null, renderCtx: RendererContext, paddingRatio = 1.0): RendererContext {
+        if (!dataView) return renderCtx;
 
         const { width, height } = renderCtx;
         const plotWidth  = Math.max(1, width  - this.MARGIN_LEFT_);
@@ -368,23 +385,32 @@ class CanvasRenderer {
         }
 
         const SAFE_MIN = 1e-6;
-        renderCtx.scaleXLog = Math.log(Math.max(fitScaleX, SAFE_MIN));
-        renderCtx.scaleYLog = Math.log(Math.max(fitScaleY, SAFE_MIN));
+        const nextScaleXLog = Math.log(Math.max(fitScaleX, SAFE_MIN));
+        const nextScaleYLog = Math.log(Math.max(fitScaleY, SAFE_MIN));
 
         // 左下に minY が来るようにオフセット調整
-        renderCtx.offsetY = minY * baseScaleY * Math.exp(renderCtx.scaleYLog);
+        const nextOffsetY = minY * baseScaleY * Math.exp(nextScaleYLog);
 
         // 横方向オフセット
+        let nextOffsetX: number;
         if (clamped) {
             // 実際のデータ幅（px換算後）
-            const usedWidth = dataPixelWidth * fitScaleX;
+            const usedWidth = dataPixelWidth * Math.exp(nextScaleXLog);
             // プロット領域中央に配置
-            renderCtx.offsetX = -(plotWidth - usedWidth) / 2;
+            nextOffsetX = -(plotWidth - usedWidth) / 2;
         } else {
             // フィットの場合は左寄せ
-            renderCtx.offsetX = 0;
-        }        
+            nextOffsetX = 0;
+        }
+
+        return {
+            ...renderCtx,
+            scaleXLog: nextScaleXLog,
+            scaleYLog: nextScaleYLog,
+            offsetX: nextOffsetX,
+            offsetY: nextOffsetY,
+        };
     }
 }
 
-export {CanvasRenderer, RendererContext, GridMap};
+export { CanvasRenderer, RendererContext, GridMap, INITIAL_RENDERER_CONTEXT, scaleX, scaleY };

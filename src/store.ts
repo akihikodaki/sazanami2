@@ -3,7 +3,7 @@ import { Loader } from "./loader";
 import { ViewDefinition, DataView, inferViewDefinition } from "./data_view";
 import { Settings } from "./settings";
 import { FileLineReader } from "./file_line_reader";
-import { RendererContext } from "./canvas_renderer";
+import { RendererContext, INITIAL_RENDERER_CONTEXT } from "./canvas_renderer";
 
 // ACTION は ACTION_END の直前に追加していく（CHANGE の開始値に影響するため）
 enum ACTION {
@@ -60,7 +60,7 @@ class Store {
     loader: Loader;
 
     // レンダラのコンテクスト
-    private renderCtx_: RendererContext = new RendererContext();
+    private renderCtx_: RendererContext = INITIAL_RENDERER_CONTEXT;
     get renderCtx(): Readonly<RendererContext> { return this.renderCtx_; }
 
     // 現在キャンバスに適用中の View
@@ -182,7 +182,7 @@ class Store {
         });
 
         this.on(ACTION.UPDATE_RENDERER_CONTEXT, (renderCtx: RendererContext) => {
-            this.renderCtx_ = renderCtx.clone();
+            this.renderCtx_ = renderCtx;
         });
 
         // data_view.ts のバリデーションを用いて厳密チェックし、初期化が通るかを確認する
