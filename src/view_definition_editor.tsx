@@ -430,15 +430,18 @@ const EditColumnModal: React.FC<EditModalProps> = ({
 //   * 失敗：前状態を維持し、エラーを返す
 const strictApply = (store: Store, testDef: ViewDefinition): { ok: boolean; errors: string[] } => {
     try {
+        // colorMap は空文字で初期化して，推定させる
+        const def = {...testDef, view: {...testDef.view, colorMap: "" }}; 
+
         // 一度生成して，不正な定義が渡った場合は例外で落ちる
-        const dv = createDataView(store.loader, testDef);
+        const dv = createDataView(store.loader, def);
         const viewDef = store.state.viewDef;
 
         let oldX = viewDef.view.axisXField;
         let oldY = viewDef.view.axisYField;
 
         // ここまで到達したら安全：即時反映
-        store.trigger(ACTION.VIEW_DEF_APPLY, testDef);
+        store.trigger(ACTION.VIEW_DEF_APPLY, def);
         store.trigger(ACTION.SHOW_MESSAGE_IN_STATUS_BAR, "View updated");
 
         // X 軸か Y 軸が変化した場合のみ FIT しなおす
