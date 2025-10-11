@@ -1,7 +1,7 @@
 // view_definition_editor.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Store, { ACTION, CHANGE } from "./store";
-import { ViewDefinition, DataView, inferViewDefinition } from "./data_view";
+import { ViewDefinition, DataView, inferViewDefinition, createDataView } from "./data_view";
 import { ColumnType } from "./loader";
 import { Modal, Dropdown } from "react-bootstrap";
 import {
@@ -430,11 +430,9 @@ const EditColumnModal: React.FC<EditModalProps> = ({
 //   * 失敗：前状態を維持し、エラーを返す
 const strictApply = (store: Store, testDef: ViewDefinition): { ok: boolean; errors: string[] } => {
     try {
-        const dv = new DataView();
         testDef.view.colorMap = ""; // ここでは空にしておく（DataView 側で自動推定される）
-        const v = dv.validateColumnSpec(store.loader, testDef.columns ?? {});
-        if (!v.ok) return { ok: false, errors: v.errors };
-        dv.init(store.loader, testDef);
+        const dv = createDataView(store.loader, testDef);
+
         let oldX = store.viewDef?.view.axisXField;
         let oldY = store.viewDef?.view.axisYField;
 

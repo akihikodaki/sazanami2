@@ -290,15 +290,21 @@ export class DataView {
     private paletteSize_ = 1024;
     private palettePacked_: Uint32Array = new Uint32Array(0);
 
+    private initialized_ = false;
+
     // ColumnSpec が loader に対して追加可能かどうかを事前検証する。
     // エラーがある場合は ok:false とエラーメッセージ配列を返す。
-    validateColumnSpec(loader: Loader, columns: ColumnSpec): { ok: boolean; errors: string[] } {
+    private validateColumnSpec_(loader: Loader, columns: ColumnSpec): { ok: boolean; errors: string[] } {
         const errors = collectColumnSpecErrors(loader, columns, new Set());
         return { ok: errors.length === 0, errors };
     }
 
     // DataView は Definition を受け取って初期化する
-    init(loader: Loader, def: ViewDefinition): void {
+    init__(loader: Loader, def: ViewDefinition): void {
+        if (this.initialized_) {
+            throw new Error("DataView has already been initialized.");
+        }
+
         const spec = def.view;
         const columns = def.columns ?? {};
 
@@ -309,7 +315,7 @@ export class DataView {
 
         // ColumnSpec 登録（仮想→実体化）
         if (Object.keys(columns).length > 0) {
-            const validation = this.validateColumnSpec(loader, columns);
+            const validation = this.validateColumnSpec_(loader, columns);
             if (!validation.ok) {
                 throw new Error(validation.errors.join("\n"));
             }
@@ -340,6 +346,8 @@ export class DataView {
         this.palettePacked_ = buildPaletteByName(this.paletteName_, this.paletteSize_);
 
         this.def_ = { view: { ...spec }, columns: { ...columns } };
+
+        this.initialized_ = true; // 以降は読み取り専用
     }
 
     // 引数で与えられた definition と一致しているか（View + Columns）
@@ -415,6 +423,12 @@ export class DataView {
     getMinColor(): number { return this.colorCol_ ? this.colorCol_.stat.min : 0; }
 
     get definition() { return this.def_; }
+}
+
+export function createDataView(loader: Loader, def: ViewDefinition): DataView {
+    const dv = new DataView();
+    dv.init__(loader, def);
+    return dv;
 }
 
 // 必要に応じて仮想列と列の仕様を推定して返す

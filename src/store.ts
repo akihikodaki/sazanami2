@@ -1,6 +1,6 @@
 // store.ts
 import { Loader } from "./loader";
-import { ViewDefinition, DataView, inferViewDefinition } from "./data_view";
+import { ViewDefinition, DataView, inferViewDefinition, createDataView } from "./data_view";
 import { Settings } from "./settings";
 import { FileLineReader } from "./file_line_reader";
 import { RendererContext, INITIAL_RENDERER_CONTEXT } from "./canvas_renderer";
@@ -188,19 +188,8 @@ class Store {
         // data_view.ts のバリデーションを用いて厳密チェックし、初期化が通るかを確認する
         const validateAndTryInit_ = (def: ViewDefinition): boolean => {
             try {
-                const dv = new DataView();
-
-                // 仮想列の検証（式の安全性等）
-                const validation = dv.validateColumnSpec(this.loader, def.columns ?? {});
-                if (!validation.ok) {
-                    console.warn("validateColumnSpec errors:", validation.errors);
-                    return false;
-                }
-
-                // 実際に初期化（列解決・式コンパイルなど）
-                dv.init(this.loader, def);
-
                 // 初期化が通る＝レンダリング可能な定義
+                const dv = createDataView(this.loader, def);
                 return true;
             } catch (e) {
                 let msg = "DataView.init failed:" + e;
