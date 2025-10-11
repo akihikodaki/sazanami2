@@ -430,7 +430,7 @@ const EditColumnModal: React.FC<EditModalProps> = ({
 //   * 失敗：前状態を維持し、エラーを返す
 const strictApply = (store: Store, testDef: ViewDefinition): { ok: boolean; errors: string[] } => {
     try {
-        testDef.view.colorMap = ""; // ここでは空にしておく（DataView 側で自動推定される）
+        // 一度生成して，不正な定義が渡った場合は例外で落ちる
         const dv = createDataView(store.loader, testDef);
 
         let oldX = store.viewDef?.view.axisXField;

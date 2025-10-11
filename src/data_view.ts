@@ -3,21 +3,31 @@ import { Loader, ColumnBuffer } from "./loader";
 import { buildPaletteByName, inferColorMapName } from "./color_map";
 
 // 軸と色の仕様
-type ViewSpec = {
+type ViewSpec = Readonly<{
     axisXField: string;
     axisYField: string;
     colorField?: string | null;
     colorMap?: string;
-};
+}>;
 
 // 行の仕様
-type ColumnSpec = Record<string, string>;
+type ColumnSpec = Readonly<Record<string, string>>;
 
-// View と Columns をまとめた全体の仕様
-type ViewDefinition = {
+// View と Columns をまとめた全体の仕様（深い readonly）
+type ViewDefinition = Readonly<{
     view: ViewSpec;
     columns: ColumnSpec;
-};
+}>;
+
+const INITIAL_VIEW_DEFINITION: ViewDefinition = {
+    view: {
+        axisXField: "__index__",
+        axisYField: "__index__",
+        colorField: null,
+        colorMap: "",
+    },
+    columns: {},
+} as const; // as const を付けておくと深い readonly になる
 
 // 一致比較
 const isEqualViewDefinition = (a: ViewDefinition, b: ViewDefinition): boolean => {
@@ -572,4 +582,4 @@ const collectColumnSpecErrors = (
     return errors;
 }
 
-export { ViewSpec, ColumnSpec, ViewDefinition, isEqualViewDefinition, createDataView, inferViewDefinition };
+export { ViewSpec, ColumnSpec, ViewDefinition, isEqualViewDefinition, createDataView, inferViewDefinition, INITIAL_VIEW_DEFINITION };

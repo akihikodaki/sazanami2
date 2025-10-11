@@ -1,6 +1,6 @@
 // store.ts
 import { Loader } from "./loader";
-import { ViewDefinition, DataView, inferViewDefinition, createDataView } from "./data_view";
+import { ViewDefinition, DataView, inferViewDefinition, createDataView, INITIAL_VIEW_DEFINITION } from "./data_view";
 import { Settings } from "./settings";
 import { FileLineReader } from "./file_line_reader";
 import { RendererContext, INITIAL_RENDERER_CONTEXT } from "./canvas_renderer";
@@ -61,11 +61,11 @@ class Store {
 
     // レンダラのコンテクスト
     private renderCtx_: RendererContext = INITIAL_RENDERER_CONTEXT;
-    get renderCtx(): Readonly<RendererContext> { return this.renderCtx_; }
+    get renderCtx(): RendererContext { return this.renderCtx_; }
 
     // 現在キャンバスに適用中の View
-    viewDef_: ViewDefinition | null = null;
-    get viewDef(): Readonly<ViewDefinition | null> { return this.viewDef_; }
+    viewDef_: ViewDefinition = INITIAL_VIEW_DEFINITION;
+    get viewDef(): ViewDefinition { return this.viewDef_; }
 
     // Settings panel を表示するかどうか
     showSettings: boolean = true;
@@ -102,7 +102,7 @@ class Store {
         this.on(ACTION.FILE_LOAD_FROM_FILE_LINE_READER, (fileLineReader: FileLineReader) => {
             this.saveDefinition();
             // 新規ファイル読み込み時は ViewDefinition をリセット
-            this.viewDef_ = null;
+            this.viewDef_ = INITIAL_VIEW_DEFINITION;
             this.trigger(CHANGE.FILE_LOADING_START);
 
             this.loader.load(
