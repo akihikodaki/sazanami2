@@ -340,7 +340,11 @@ export class DataView {
             if (name === "__index__") return new IndexColumn(this.numRows_);
             const vcol = this.registry_.get(name);
             if (vcol) return vcol;
-            return loader.columnFromName(name) as unknown as NumberColumn;
+            let col = loader.columnFromName(name) as unknown as NumberColumn;
+            if (!col) {
+                col = new IndexColumn(this.numRows_); // フォールバックとして行インデクス列
+            }
+            return col;
         };
 
         this.xCol_ = resolveByName(spec.axisXField);
