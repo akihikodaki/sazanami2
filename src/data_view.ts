@@ -20,7 +20,7 @@ type ViewDefinition = {
 };
 
 // 一致比較
-export const isEqualViewDefinition = (a: ViewDefinition, b: ViewDefinition): boolean => {
+const isEqualViewDefinition = (a: ViewDefinition, b: ViewDefinition): boolean => {
     const va = a.view, vb = b.view;
     if (
         va.axisXField !== vb.axisXField ||
@@ -300,7 +300,7 @@ export class DataView {
     }
 
     // DataView は Definition を受け取って初期化する
-    init__(loader: Loader, def: ViewDefinition): void {
+    init(loader: Loader, def: ViewDefinition): void {
         if (this.initialized_) {
             throw new Error("DataView has already been initialized.");
         }
@@ -425,14 +425,14 @@ export class DataView {
     get definition() { return this.def_; }
 }
 
-export function createDataView(loader: Loader, def: ViewDefinition): DataView {
+const createDataView = (loader: Loader, def: ViewDefinition): DataView => {
     const dv = new DataView();
-    dv.init__(loader, def);
+    dv.init(loader, def);
     return dv;
 }
 
 // 必要に応じて仮想列と列の仕様を推定して返す
-export const inferViewDefinition = (loader: Loader): ViewDefinition => {
+const inferViewDefinition = (loader: Loader): ViewDefinition => {
     if (loader.detectionDone === false) {
         throw new Error("Type detection not done yet");
     }
@@ -572,4 +572,4 @@ const collectColumnSpecErrors = (
     return errors;
 }
 
-export { ViewSpec, ColumnSpec, ViewDefinition };
+export { ViewSpec, ColumnSpec, ViewDefinition, isEqualViewDefinition, createDataView, inferViewDefinition };
