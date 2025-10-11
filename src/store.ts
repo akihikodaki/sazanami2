@@ -50,7 +50,22 @@ enum CHANGE {
     LOG_OVERLAY_VISIBILITY_CHANGED, // payload: boolean
 };
 
+type StoreState = Readonly<{
+    renderCtx: RendererContext;     // レンダラのコンテクスト
+    viewDef: ViewDefinition;         // ビューの定義
+    showSettings: boolean;          // 設定パネルの表示フラグ
+    showDebugOverlay: boolean;      // デバッグオーバーレイの表示フラグ
+    logs: readonly string[];        // ログの配列
+}>;
 
+// 初期値
+const INITIAL_STORE_STATE: StoreState = {
+    renderCtx: INITIAL_RENDERER_CONTEXT,
+    viewDef: INITIAL_VIEW_DEFINITION,
+    showSettings: true,
+    showDebugOverlay: false,
+    logs: [],
+} as const;
 
 class Store {
     // イベントハンドラ登録
@@ -59,31 +74,27 @@ class Store {
     // Loader（TSV 読み込み・列アクセス）
     loader: Loader;
 
-    // レンダラのコンテクスト
-    private renderCtx_: RendererContext = INITIAL_RENDERER_CONTEXT;
-    get renderCtx(): RendererContext { return this.renderCtx_; }
+    // state はイミュータブルに持つ
+    private state_: StoreState = INITIAL_STORE_STATE;
+    get state(): StoreState { return this.state_; }
 
-    // 現在キャンバスに適用中の View
-    viewDef_: ViewDefinition = INITIAL_VIEW_DEFINITION;
-    get viewDef(): ViewDefinition { return this.viewDef_; }
+    // 内部専用：状態の置換（常に新インスタンスで）
+    private setState(next: StoreState) {
+        this.state_ = next;
+    }
 
-    // Settings panel を表示するかどうか
-    showSettings: boolean = true;
-
-    // Debug Overlay 表示状態
-    showDebugOverlay: boolean = false;
-
-    // Store 内部に簡易ログを保持（公開メソッドなし）
-    private logs: string[] = [];
-
+    // 部分更新（パッチ）ユーティリティ
+    private patchState(patch: Partial<StoreState>) {
+        this.setState({ ...this.state_, ...patch });
+    }
 
     // アプリ設定
     settings = new Settings();
     saveDefinition() {
-        if (this.viewDef_ && this.loader.headers.length > 0) {
+        if (this.state_.viewDef && this.loader.headers.length > 0) {
             const key = (this.loader.headers ?? []).join("--");
             if (key) {
-                this.settings.viewDefMapHistory[key] = this.viewDef_;
+                this.settings.viewDefMapHistory[key] = this.state_.viewDef;
                 this.settings.save();
             }
         }
@@ -102,7 +113,7 @@ class Store {
         this.on(ACTION.FILE_LOAD_FROM_FILE_LINE_READER, (fileLineReader: FileLineReader) => {
             this.saveDefinition();
             // 新規ファイル読み込み時は ViewDefinition をリセット
-            this.viewDef_ = INITIAL_VIEW_DEFINITION;
+            this.patchState({ viewDef: INITIAL_VIEW_DEFINITION });
             this.trigger(CHANGE.FILE_LOADING_START);
 
             this.loader.load(
@@ -157,23 +168,24 @@ class Store {
         this.on(ACTION.MOUSE_MOVE, (str) => { this.trigger(CHANGE.MOUSE_MOVE, str); });
         this.on(ACTION.SHOW_MESSAGE_IN_STATUS_BAR, (str) => { this.trigger(CHANGE.SHOW_MESSAGE_IN_STATUS_BAR, str); });
         this.on(ACTION.SHOW_SETTINGS, (show) => {
-            this.showSettings = show;
+            this.patchState({ showSettings: show });
             this.trigger(CHANGE.SHOW_SETTINGS, show);
         });
         this.on(ACTION.CANVAS_FIT, () => { this.trigger(CHANGE.CANVAS_FIT); });
 
         this.on(ACTION.LOG_ADD, (payload: string) => {
-            this.logs.push(payload);
+            const nextLogs = [...this.state_.logs, payload];
+            this.patchState({ logs: nextLogs });
             this.trigger(CHANGE.LOG_ADDED, payload);
         });
         this.on(ACTION.LOG_CLEAR, () => {
-            this.logs = [];
+            this.patchState({ logs: [] });
             this.trigger(CHANGE.LOG_CLEARED);
         });
 
         this.on(ACTION.SHOW_LOG_OVERLAY, (show: boolean) => {
-            this.showDebugOverlay = !!show;
-            this.trigger(CHANGE.LOG_OVERLAY_VISIBILITY_CHANGED, this.showDebugOverlay);
+            this.patchState({ showDebugOverlay: !!show });
+            this.trigger(CHANGE.LOG_OVERLAY_VISIBILITY_CHANGED, this.state_.showDebugOverlay);
         });
 
         this.on(ACTION.SETTINGS_SAVE_REQUEST, () => {
@@ -182,7 +194,8 @@ class Store {
         });
 
         this.on(ACTION.UPDATE_RENDERER_CONTEXT, (renderCtx: RendererContext) => {
-            this.renderCtx_ = renderCtx;
+            if (renderCtx === this.state_.renderCtx) return; // 変更なし最適化
+            this.patchState({ renderCtx });
         });
 
         // data_view.ts のバリデーションを用いて厳密チェックし、初期化が通るかを確認する
@@ -202,7 +215,7 @@ class Store {
         // Apply: バリデーションのうえでコミット＆適用
         const applyDefinition = (def: ViewDefinition) => {
             const ok = validateAndTryInit_(def);
-            this.viewDef_ = def;
+            this.patchState({ viewDef: def });
             if (!ok) {
                 this.trigger(CHANGE.SHOW_MESSAGE_IN_STATUS_BAR, "Apply failed: validation error");
                 return;

@@ -41,7 +41,7 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
     useEffect(() => {
         const renderer = rendererRef.current;
         const gridMap = gridMapRef.current;
-        const draw = () => renderer.draw(canvasRef.current!, gridMap, store.loader.GetDataView(store.viewDef), store.renderCtx);
+        const draw = () => renderer.draw(canvasRef.current!, gridMap, store.loader.GetDataView(store.state.viewDef), store.state.renderCtx);
 
         const canvas = canvasRef.current!;
         const div = divRef.current!;
@@ -123,8 +123,8 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
             cancelPanAnimation();
 
             const start = performance.now();
-            const fromX = store.renderCtx.offsetX;
-            const fromY = store.renderCtx.offsetY;
+            const fromX = store.state.renderCtx.offsetX;
+            const fromY = store.state.renderCtx.offsetY;
 
             // easing（加速→減速）
             const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
@@ -135,7 +135,7 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
 
                 // 絶対位置を補間して直接設定（差分適用しない）
                 const renderCtx = {
-                    ...store.renderCtx,
+                    ...store.state.renderCtx,
                     offsetX: fromX + totalDx * eased,
                     offsetY: fromY + totalDy * eased,
                 };
@@ -147,7 +147,7 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
                 } else {
                     // 最終位置にスナップ（浮動小数の誤差吸収）
                     const renderCtx = {
-                        ...store.renderCtx,
+                        ...store.state.renderCtx,
                         offsetX: fromX + totalDx,
                         offsetY: fromY + totalDy,
                     };
@@ -193,8 +193,8 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
                 const d = getTouchDistance(e.touches[0], e.touches[1]);
                 touchRef.current.initialDistance = d;
                 touchRef.current.lastCenter = getTouchCenter(e.touches[0], e.touches[1]);
-                touchRef.current.initialScaleXLog = store.renderCtx.scaleXLog;
-                touchRef.current.initialScaleYLog = store.renderCtx.scaleYLog;
+                touchRef.current.initialScaleXLog = store.state.renderCtx.scaleXLog;
+                touchRef.current.initialScaleYLog = store.state.renderCtx.scaleYLog;
                 touchRef.current.inPinch = true;
                 touchRef.current.inSwipe = false;
             } else if (e.touches.length === 1) { // 1本指でのタッチ開始
@@ -223,16 +223,16 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
                 const lastCenter = touchRef.current.lastCenter ?? center;
 
                 // 直前スケール（prev）を保存
-                const prevX = scaleX(store.renderCtx.scaleXLog);
-                const prevY = scaleY(store.renderCtx.scaleYLog);
+                const prevX = scaleX(store.state.renderCtx.scaleXLog);
+                const prevY = scaleY(store.state.renderCtx.scaleYLog);
 
                 // 新しいスケール（new）
                 const newX = scaleX(targetXLog);
                 const newY = scaleY(targetYLog);
 
                 // アンカー（中心）を固定するようにオフセットを更新（zoomUniform と同等）
-                const relX = center.x - marginLeft + store.renderCtx.offsetX;
-                const relY = center.y + store.renderCtx.offsetY;
+                const relX = center.x - marginLeft + store.state.renderCtx.offsetX;
+                const relY = center.y + store.state.renderCtx.offsetY;
                 let nextOffsetX = relX * (newX / Math.max(prevX, 1e-12)) - (center.x - marginLeft);
                 let nextOffsetY = relY * (newY / Math.max(prevY, 1e-12)) - center.y;
 
@@ -246,7 +246,7 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
                 touchRef.current.lastCenter = center;
 
                 const next = {
-                    ...store.renderCtx,
+                    ...store.state.renderCtx,
                     scaleXLog: targetXLog,
                     scaleYLog: targetYLog,
                     offsetX: nextOffsetX,
@@ -263,9 +263,9 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
                 const dy = current.y - last.y;
 
                 const next = {
-                    ...store.renderCtx,
-                    offsetX: store.renderCtx.offsetX - dx,
-                    offsetY: store.renderCtx.offsetY - dy,
+                    ...store.state.renderCtx,
+                    offsetX: store.state.renderCtx.offsetX - dx,
+                    offsetY: store.state.renderCtx.offsetY - dy,
                 };
 
                 touchRef.current.lastPos = current;
@@ -306,7 +306,7 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
             canvasCtx.resetTransform?.();
             canvasCtx.scale(dpr, dpr);
 
-            store.trigger(ACTION.UPDATE_RENDERER_CONTEXT, { ...store.renderCtx, width, height });
+            store.trigger(ACTION.UPDATE_RENDERER_CONTEXT, { ...store.state.renderCtx, width, height });
             draw();
         };
 
@@ -324,13 +324,13 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
             if (e.shiftKey) {
                 // 一様ズーム
                 animateZoomByTime(ZOOM_DURATION_MS, ZOOM_DIVISIONS_WHEEL, (divs) => {
-                    const next = renderer.zoomUniform(store.renderCtx, mouseX, mouseY, zoomIn, divs);
+                    const next = renderer.zoomUniform(store.state.renderCtx, mouseX, mouseY, zoomIn, divs);
                     store.trigger(ACTION.UPDATE_RENDERER_CONTEXT, next);
                 });
             } else if (e.ctrlKey) {
                 // 水平ズーム
                 animateZoomByTime(ZOOM_DURATION_MS, ZOOM_DIVISIONS_WHEEL, (divs) => {
-                    const next = renderer.zoomHorizontal(store.renderCtx, mouseX, mouseY, zoomIn, divs);
+                    const next = renderer.zoomHorizontal(store.state.renderCtx, mouseX, mouseY, zoomIn, divs);
                     store.trigger(ACTION.UPDATE_RENDERER_CONTEXT, next);
                 });
             } else {
@@ -342,19 +342,19 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
 
         // キーボード操作
         const handleKeyDown = (e: KeyboardEvent) => {
-            const zoomX = store.renderCtx.width / 2;
-            const zoomY = store.renderCtx.height / 2;
+            const zoomX = store.state.renderCtx.width / 2;
+            const zoomY = store.state.renderCtx.height / 2;
 
             const runZoom = (mode: "uniform" | "horizontal" | "vertical", zoomIn: boolean) => {
                 e.preventDefault();
                 animateZoomByTime(ZOOM_DURATION_MS, ZOOM_DIVISIONS_KEY, (divs) => {
                     let next: RendererContext;
                     if (mode === "uniform") {
-                        next = renderer.zoomUniform(store.renderCtx, zoomX, zoomY, zoomIn, divs);
+                        next = renderer.zoomUniform(store.state.renderCtx, zoomX, zoomY, zoomIn, divs);
                     } else if (mode === "horizontal") {
-                        next = renderer.zoomHorizontal(store.renderCtx, zoomX, zoomY, zoomIn, divs);
+                        next = renderer.zoomHorizontal(store.state.renderCtx, zoomX, zoomY, zoomIn, divs);
                     } else {
-                        next = renderer.zoomVertical(store.renderCtx, zoomX, zoomY, zoomIn, divs);
+                        next = renderer.zoomVertical(store.state.renderCtx, zoomX, zoomY, zoomIn, divs);
                     }
                     store.trigger(ACTION.UPDATE_RENDERER_CONTEXT, next);
                 });
@@ -426,16 +426,16 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
                 lastY = e.clientY;
 
                 const next = {
-                    ...store.renderCtx,
-                    offsetX: store.renderCtx.offsetX - dx,
-                    offsetY: store.renderCtx.offsetY - dy,
+                    ...store.state.renderCtx,
+                    offsetX: store.state.renderCtx.offsetX - dx,
+                    offsetY: store.state.renderCtx.offsetY - dy,
                 };
                 store.trigger(ACTION.UPDATE_RENDERER_CONTEXT, next);
                 draw();
                 return;
             }
 
-            const dataView = store.loader.GetDataView(store.viewDef);
+            const dataView = store.loader.GetDataView(store.state.viewDef);
             if (!dataView || !gridMap.drawnIndex) {
                 store.trigger(ACTION.MOUSE_MOVE, "");
                 return;
@@ -446,7 +446,7 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
             const mouseX = e.clientX - rect.left;
             const mouseY = e.clientY - rect.top;
 
-            const payload = renderer.getText(mouseX, mouseY, gridMap, dataView, store.renderCtx, store.loader);
+            const payload = renderer.getText(mouseX, mouseY, gridMap, dataView, store.state.renderCtx, store.loader);
             store.trigger(ACTION.MOUSE_MOVE, payload);
         };
 
@@ -474,7 +474,7 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
 
         // Store change handler
         const onFileLoadStarted = () => {
-            const next = { ...store.renderCtx, numRows: 0 };
+            const next = { ...store.state.renderCtx, numRows: 0 };
             store.trigger(ACTION.UPDATE_RENDERER_CONTEXT, next);
             handleResize();
             const canvasCtx = canvas.getContext("2d")!;
@@ -489,19 +489,19 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
             // if (renderCtx.offsetY > renderCtx.dataView.getMaxY()) {
             //     renderCtx.offsetY = renderCtx.dataView.getMaxY() - renderCtx.height;
             // }
-            if (!store.viewDef) {
+            if (!store.state.viewDef) {
                 console.log("No view definition after format detected");
                 return;
             }
-            const dataView = store.loader.GetDataView(store.viewDef);
-            const next = renderer.fitScaleToData(dataView, store.renderCtx, 1.0);
+            const dataView = store.loader.GetDataView(store.state.viewDef);
+            const next = renderer.fitScaleToData(dataView, store.state.renderCtx, 1.0);
             store.trigger(ACTION.UPDATE_RENDERER_CONTEXT, next);
         };
         const onContentUpdated = () => {
-            if (!store.viewDef) {
+            if (!store.state.viewDef) {
                 return; // まだフォーマットが確定しておらずビュー定義がない
             }
-            const next = { ...store.renderCtx, numRows: store.loader.numRows };
+            const next = { ...store.state.renderCtx, numRows: store.loader.numRows };
             store.trigger(ACTION.UPDATE_RENDERER_CONTEXT, next);
             draw();
         };
@@ -510,8 +510,8 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
         store.on(CHANGE.FILE_FORMAT_DETECTED, onFileFormatDetected);
         store.on(CHANGE.CONTENT_UPDATED, onContentUpdated);
         store.on(CHANGE.CANVAS_FIT, () => {
-            const dataView = store.loader.GetDataView(store.viewDef);
-            const next = renderer.fitScaleToData(dataView, store.renderCtx, 1.0);
+            const dataView = store.loader.GetDataView(store.state.viewDef);
+            const next = renderer.fitScaleToData(dataView, store.state.renderCtx, 1.0);
             store.trigger(ACTION.UPDATE_RENDERER_CONTEXT, next);
             draw();
         });

@@ -38,9 +38,9 @@ const ToolBar = (props: {store: Store;}) => {
         case "menu_version":  store.trigger(ACTION.DIALOG_VERSION_OPEN); break;
         case "menu_load": openFile(); break;
         case "menu_keyboard_shortcuts": store.trigger(ACTION.DIALOG_HELP_OPEN); break;
-        case "menu_settings": store.trigger(ACTION.SHOW_SETTINGS, !store.showSettings); break;
+        case "menu_settings": store.trigger(ACTION.SHOW_SETTINGS, !store.state.showSettings); break;
         case "menu_fit": store.trigger(ACTION.CANVAS_FIT); break;
-        case "menu_debug_overlay_toggle": store.trigger(ACTION.SHOW_LOG_OVERLAY, !store.showDebugOverlay); break;
+        case "menu_debug_overlay_toggle": store.trigger(ACTION.SHOW_LOG_OVERLAY, !store.state.showDebugOverlay); break;
         }
         setSelectedKey(0);
     };
@@ -351,7 +351,7 @@ type Props = {
 
 const LogOverlay: React.FC<Props> = ({ store, width = 420, height = 120 }) => {
     const [logs, setLogs] = useState<string[]>([]);
-    const [visible, setVisible] = useState<boolean>(store.showDebugOverlay);
+    const [visible, setVisible] = useState<boolean>(store.state.showDebugOverlay);
     const listRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
@@ -363,7 +363,7 @@ const LogOverlay: React.FC<Props> = ({ store, width = 420, height = 120 }) => {
         store.on(CHANGE.LOG_CLEARED, onCleared);
         store.on(CHANGE.LOG_OVERLAY_VISIBILITY_CHANGED, onVis);
 
-        setVisible(store.showDebugOverlay);
+        setVisible(store.state.showDebugOverlay);
 
         return () => {
             store.off(CHANGE.LOG_ADDED, onAdded);

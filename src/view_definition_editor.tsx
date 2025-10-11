@@ -432,16 +432,17 @@ const strictApply = (store: Store, testDef: ViewDefinition): { ok: boolean; erro
     try {
         // 一度生成して，不正な定義が渡った場合は例外で落ちる
         const dv = createDataView(store.loader, testDef);
+        const viewDef = store.state.viewDef;
 
-        let oldX = store.viewDef?.view.axisXField;
-        let oldY = store.viewDef?.view.axisYField;
+        let oldX = viewDef.view.axisXField;
+        let oldY = viewDef.view.axisYField;
 
         // ここまで到達したら安全：即時反映
         store.trigger(ACTION.VIEW_DEF_APPLY, testDef);
         store.trigger(ACTION.SHOW_MESSAGE_IN_STATUS_BAR, "View updated");
 
         // X 軸か Y 軸が変化した場合のみ FIT しなおす
-        if (oldX !== store.viewDef?.view.axisXField || oldY !== store.viewDef?.view.axisYField)
+        if (oldX !== viewDef.view.axisXField || oldY !== viewDef.view.axisYField)
             store.trigger(ACTION.CANVAS_FIT);
 
         return { ok: true, errors: [] };
@@ -453,13 +454,13 @@ const strictApply = (store: Store, testDef: ViewDefinition): { ok: boolean; erro
 // メイン：ViewDefinitionEditor（常時即時反映・Draft不要）
 export const ViewDefinitionEditor: React.FC<{ store: Store }> = ({ store }) => {
     // 現行定義（store.viewDef）を参照
-    const [current, setCurrent] = useState<ViewDefinition | null>(() => {
-        return (store.viewDef ?? null) as ViewDefinition | null;
+    const [current, setCurrent] = useState<ViewDefinition>(() => {
+        return store.state.viewDef;
     });
 
     // Store の変化で再読込（FILE_LOADED / CONTENT_UPDATED など）
     useEffect(() => {
-        const reload = () => setCurrent((store.viewDef ?? null) as ViewDefinition | null);
+        const reload = () => setCurrent(store.state.viewDef);
         store.on(CHANGE.FILE_LOADED, reload);
         store.on(CHANGE.CONTENT_UPDATED, reload);
         return () => {
@@ -604,7 +605,7 @@ export const ViewDefinitionEditor: React.FC<{ store: Store }> = ({ store }) => {
     const importRef = useRef<HTMLInputElement>(null);
     const [importKey, setImportKey] = useState(0);
     const handleExport = () => {
-        const def = store.viewDef ?? current ?? {
+        const def = store.state.viewDef ?? current ?? {
             view: { axisXField: "__index__", axisYField: "__index__", colorField: null },
             columns: {}
         };
