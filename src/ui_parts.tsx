@@ -3,6 +3,7 @@ import Store, { ACTION, CHANGE } from "./store";
 import ViewDefinitionEditor from "./view_definition_editor";
 
 
+import { fileOpen } from "browser-fs-access";
 import {Nav, Navbar, NavDropdown} from "react-bootstrap";
 import { Modal } from "react-bootstrap";
 
@@ -14,15 +15,9 @@ const ToolBar = (props: {store: Store;}) => {
     const [logCount, setLogCount] = useState(0);
 
     const openFile = async () => {
-        if (typeof (window as any).showOpenFilePicker !== 'function') {
-            store.trigger(ACTION.LOG_ADD, "showOpenFilePicker is not supported");
-            return;
-        }
-        
          try {
             // ファイルを読み込む
-            const [fileHandle]: [FileSystemFileHandle] = await (window as any).showOpenFilePicker();
-            const file = await fileHandle.getFile();
+            const file = await fileOpen();
             store.trigger(ACTION.FILE_LOAD_FROM_FILE_OBJECT, file);
          }
          catch (error) {
