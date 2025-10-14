@@ -334,9 +334,9 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
                     store.trigger(ACTION.UPDATE_RENDERER_CONTEXT, next);
                 });
             } else {
-                // 縦スクロールもアニメーション
-                // ホイールイベント 1 回ぶんの deltaY を一定時間で補間
-                animatePanByTime(PAN_DURATION_MS, 0, e.deltaY);
+                // スクロールもアニメーション
+                // ホイールイベント 1 回ぶんの deltaX と deltaY を一定時間で補間
+                animatePanByTime(PAN_DURATION_MS, e.deltaX, e.deltaY);
             }
         };
 
