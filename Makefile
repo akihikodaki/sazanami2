@@ -14,7 +14,7 @@ serve:
 
 init:
 	npm install
-	npx license-checker --production --relativeLicensePath > THIRD-PARTY-LICENSES.md
+	npx license-checker --production --relativeLicensePath --excludePackages sazanami2@0.0.2 > THIRD-PARTY-LICENSES.md
 	sed -i "s|$(shell pwd)/||g" THIRD-PARTY-LICENSES.md
 
 clean:

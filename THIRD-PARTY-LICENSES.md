@@ -190,11 +190,6 @@
 │  ├─ repository: https://github.com/facebook/react
 │  ├─ path: node_modules/react
 │  └─ licenseFile: node_modules/react/LICENSE
-├─ sazanami2@0.0.1
-│  ├─ licenses: BSD-3-Clause
-│  ├─ publisher: Ryota Shioya
-│  ├─ path: /home/shioya/work/sazanami2
-│  └─ licenseFile: LICENSE.md
 ├─ scheduler@0.23.2
 │  ├─ licenses: MIT
 │  ├─ repository: https://github.com/facebook/react
