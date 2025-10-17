@@ -10,8 +10,8 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
 
     // ズーム用アニメーションの RA フレームID
     const zoomRafIdRef = useRef<number | null>(null);
-    // パン（スクロール）用アニメーションの RA フレームID
-    const panRafIdRef = useRef<number | null>(null);
+    // パン（スクロール）
+    const panRef = useRef({ remainingDx: 0, remainingDy: 0, rafId: null as number | null });
 
     // 一回の操作あたりのアニメーション時間（一定時間で終わる）
     const ZOOM_DURATION_MS = 90;        // ズームの所要時間
@@ -54,9 +54,9 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
             }
         };
         const cancelPanAnimation = () => {
-            if (panRafIdRef.current != null) {
-                cancelAnimationFrame(panRafIdRef.current);
-                panRafIdRef.current = null;
+            if (panRef.current.rafId != null) {
+                cancelAnimationFrame(panRef.current.rafId);
+                panRef.current.rafId = null;
             }
         };
 
@@ -121,6 +121,8 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
             totalDy: number
         ) => {
             cancelPanAnimation();
+            totalDx += panRef.current.remainingDx;
+            totalDy += panRef.current.remainingDy;
 
             const start = performance.now();
             const fromX = store.state.renderCtx.offsetX;
@@ -139,11 +141,13 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
                     offsetX: fromX + totalDx * eased,
                     offsetY: fromY + totalDy * eased,
                 };
+                panRef.current.remainingDx = totalDx * (1 - eased);
+                panRef.current.remainingDy = totalDy * (1 - eased);
                 store.trigger(ACTION.UPDATE_RENDERER_CONTEXT, renderCtx);
                 draw();
 
                 if (t < 1) {
-                    panRafIdRef.current = requestAnimationFrame(tick);
+                    panRef.current.rafId = requestAnimationFrame(tick);
                 } else {
                     // 最終位置にスナップ（浮動小数の誤差吸収）
                     const renderCtx = {
@@ -153,11 +157,15 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
                     };
                     store.trigger(ACTION.UPDATE_RENDERER_CONTEXT, renderCtx);
                     draw();
-                    panRafIdRef.current = null;
+                    panRef.current.remainingDx = 0;
+                    panRef.current.remainingDy = 0;
+                    panRef.current.rafId = null;
                 }
             };
 
-            panRafIdRef.current = requestAnimationFrame(tick);
+            panRef.current.remainingDx = totalDx;
+            panRef.current.remainingDy = totalDy;
+            panRef.current.rafId = requestAnimationFrame(tick);
         };
         // =======================================
 
