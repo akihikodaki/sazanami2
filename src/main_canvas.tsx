@@ -410,62 +410,110 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
             }
         };
 
-        // Drag handlers for panning
-        let isDragging = false;
-        let lastX = 0;
-        let lastY = 0;
+        // Drag handlers for panning and pinching
+        let dragState: null | {
+            type: "pan",
+            lastX: number,
+            lastY: number
+        } | {
+            type: "pinch",
+            initialScaleXLog: number,
+            initialScaleYLog: number,
+            dx: number,
+            dy: number
+        } = null;
         const handleMouseDown = (e: MouseEvent) => {
+            if (dragState) {
+                return;
+            }
+
             // パン開始時にズーム/パンのアニメーションが走っていれば止める（競合防止）
             cancelZoomAnimation();
             cancelPanAnimation();
 
-            isDragging = true;
-            lastX = e.clientX;
-            lastY = e.clientY;
             canvas.style.cursor = "grabbing";
+
+            if (e.button == 2) {
+                dragState = {
+                    type: "pinch",
+                    initialScaleXLog: store.state.renderCtx.scaleXLog,
+                    initialScaleYLog: store.state.renderCtx.scaleYLog,
+                    dx: 0,
+                    dy: 0
+                };
+                canvas.requestPointerLock();
+            } else {
+                dragState = {
+                    type: "pan",
+                    lastX: e.clientX,
+                    lastY: e.clientY
+                };
+            }
         };
 
         const handleMouseMove = (e: MouseEvent) => {
-            if (isDragging) {
-                // ドラッグ中はパン処理のみ
-                const dx = e.clientX - lastX;
-                const dy = e.clientY - lastY;
-                lastX = e.clientX;
-                lastY = e.clientY;
+            if (!dragState) {
+                const dataView = store.loader.GetDataView(store.state.viewDef);
+                if (!dataView || !gridMap.drawnIndex) {
+                    store.trigger(ACTION.MOUSE_MOVE, "");
+                    return;
+                }
 
-                const next = {
-                    ...store.state.renderCtx,
-                    offsetX: store.state.renderCtx.offsetX - dx,
-                    offsetY: store.state.renderCtx.offsetY - dy,
-                };
-                store.trigger(ACTION.UPDATE_RENDERER_CONTEXT, next);
-                draw();
+                // マウス位置（CSSピクセル）のテキストを得る
+                const rect = canvas.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+
+                const payload = renderer.getText(mouseX, mouseY, gridMap, dataView, store.state.renderCtx, store.loader);
+                store.trigger(ACTION.MOUSE_MOVE, payload);
                 return;
             }
 
-            const dataView = store.loader.GetDataView(store.state.viewDef);
-            if (!dataView || !gridMap.drawnIndex) {
-                store.trigger(ACTION.MOUSE_MOVE, "");
-                return;
+            let next;
+
+            switch (dragState.type) {
+                case "pan":
+                    const dx = e.clientX - dragState.lastX;
+                    const dy = e.clientY - dragState.lastY;
+                    dragState.lastX = e.clientX;
+                    dragState.lastY = e.clientY;
+
+                    next = {
+                        ...store.state.renderCtx,
+                        offsetX: store.state.renderCtx.offsetX - dx,
+                        offsetY: store.state.renderCtx.offsetY - dy,
+                    };
+                    break;
+
+                case "pinch":
+                    dragState.dx += e.movementX;
+                    dragState.dy += e.movementY;
+
+                    next = renderer.applyZoom(store.state.renderCtx, e.clientX, e.clientY, {
+                        x: dragState.initialScaleXLog + Math.sign(dragState.dx) * Math.max(0, Math.log(Math.abs(dragState.dx) / canvas.width * 1e2)),
+                        y: dragState.initialScaleYLog + Math.sign(dragState.dy) * Math.max(0, Math.log(Math.abs(dragState.dy) / canvas.height * 1e2))
+                    });
+                    break;
             }
 
-            // マウス位置（CSSピクセル）のテキストを得る
-            const rect = canvas.getBoundingClientRect();
-            const mouseX = e.clientX - rect.left;
-            const mouseY = e.clientY - rect.top;
-
-            const payload = renderer.getText(mouseX, mouseY, gridMap, dataView, store.state.renderCtx, store.loader);
-            store.trigger(ACTION.MOUSE_MOVE, payload);
+            store.trigger(ACTION.UPDATE_RENDERER_CONTEXT, next);
+            draw();
         };
 
-        const handleMouseUp = () => {
-            isDragging = false;
+        const handleMouseUp = (e: MouseEvent) => {
+            if (dragState?.type != (e.button == 2 ? "pinch" : "pan")) {
+                return;
+            }
+
+            dragState = null;
+            document.exitPointerLock();
             canvas.style.cursor = "default";
         };
 
         const ro = new ResizeObserver(handleResize);
         ro.observe(div);
 
+        canvas.addEventListener("contextmenu", (e) => e.preventDefault());
         div.addEventListener("wheel", handleWheel, { passive: false });
         window.addEventListener("keydown", handleKeyDown);
         canvas.addEventListener("mousedown", handleMouseDown);
