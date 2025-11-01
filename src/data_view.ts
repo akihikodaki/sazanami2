@@ -299,6 +299,7 @@ export class DataView {
     private paletteName_: string | undefined;
     private paletteSize_ = 1024;
     private palettePacked_: Uint32Array = new Uint32Array(0);
+    private paletteContinuous_: boolean = false;    // 連続値向けかどうか
 
     private initialized_ = false;
 
@@ -357,7 +358,9 @@ export class DataView {
             colorMap = inferColorMapName(loader, spec.colorField);
         }
         this.paletteName_ = colorMap;
-        this.palettePacked_ = buildPaletteByName(this.paletteName_, this.paletteSize_);
+        let palInfo = buildPaletteByName(this.paletteName_, this.paletteSize_);
+        this.palettePacked_ = palInfo[0];
+        this.paletteContinuous_ = palInfo[1];
 
         this.def_ = { view: { ...spec }, columns: { ...columns } };
 
@@ -380,8 +383,8 @@ export class DataView {
         const v = this.colorCol_.getNumber(i);
         if (!Number.isFinite(v)) return 0;
 
-        const range = this.colorCol_.stat.max - this.colorCol_.stat.min;
-        if (range > 128) {  // 連続値っぽい場合はスケーリングする
+        if (this.paletteContinuous_) {  // 連続値っぽい場合はスケーリングする
+            const range = this.colorCol_.stat.max - this.colorCol_.stat.min;
             const t = (v - this.colorCol_.stat.min) / range;
             return Math.floor(t * this.paletteSize_);
         }

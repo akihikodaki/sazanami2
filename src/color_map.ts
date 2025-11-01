@@ -168,29 +168,36 @@ const postAdjustForDarkBG = (
     return pal;
 };
 
-
-const buildPaletteByName = (name: string | undefined, size: number): Uint32Array => {
+// カラーマップ名からパレット生成
+// 返値: [パレット配列, 連続値向けかどうか]
+const buildPaletteByName = (name: string | undefined, size: number): [Uint32Array, boolean ]=> {
     const key = (name ?? "viridis").toLowerCase();
     let pal: Uint32Array;
+    let continuous: boolean;
     if (key === "okabe-ito" || key === "okabeito" || key === "okabe_ito") {
         pal = buildCategoricalRepeat(OKABE_ITO, size);
+        continuous = false;
     }
     else if (key === "glasbey") {
         pal = buildCategoricalRepeat(GLASBEY_32, size);
+        continuous = false;
     }
     else if (key === "rdbu" || key === "rd_bu" || key === "rd-bu") {
         pal = buildGradient(RDBU_STOPS, size);
+        continuous = true;
     }
     else if (key === "viridis") {
         pal = buildGradient(VIRIDIS_STOPS, size);
+        continuous = true;
     }
     else {
         // 不明な名前は okabe-ito 扱い
         pal = buildCategoricalRepeat(OKABE_ITO, size);
+        continuous = false;
     }
 
     // 暗背景向けに調整
-    return postAdjustForDarkBG(pal);
+    return [postAdjustForDarkBG(pal), continuous];
 };
 
 
