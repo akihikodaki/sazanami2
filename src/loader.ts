@@ -351,6 +351,10 @@ class Loader {
 
         // stats更新
         const stat = col.stat;
+        const dev = stat.max - code;
+        if (stat.deviationFromMax < dev) {
+            stat.deviationFromMax = dev;
+        }
         if (code > stat.max) stat.max = code;
         if (code < stat.min) stat.min = code;
     }
@@ -377,6 +381,10 @@ class Loader {
 
         // stats更新
         const stat = col.stat;
+        const dev = stat.max - code;
+        if (stat.deviationFromMax < dev) {
+            stat.deviationFromMax = dev;
+        }
         if (code > stat.max) stat.max = code;
         if (code < stat.min) stat.min = code;
     }
