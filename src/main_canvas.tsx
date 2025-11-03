@@ -343,6 +343,17 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
 
         // キーボード操作
         const handleKeyDown = (e: KeyboardEvent) => {
+            // input要素やtextarea要素にフォーカスがある場合は無視
+            const activeElement = document.activeElement;
+            if (activeElement && (
+                activeElement.tagName === 'INPUT' || 
+                activeElement.tagName === 'TEXTAREA' ||
+                (activeElement as HTMLElement).contentEditable === 'true'
+            )) {
+                return;
+            }
+
+
             const zoomX = store.state.renderCtx.width / 2;
             const zoomY = store.state.renderCtx.height / 2;
 
