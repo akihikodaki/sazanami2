@@ -215,7 +215,7 @@ const inferColorMapName = (loader: Loader, fieldName: string | null | undefined)
 
     const n = loader.numRows;
     const sampler = colBuf;
-    const maxScan = Math.min(n, 5000);
+    const maxScan = Math.min(n, loader.typeDetectLineNum);  // Loader のタイプディテクトにあわせる
     const uniques = new Set<number>();
     let sawFloat = false;
 
@@ -244,7 +244,7 @@ const inferColorMapName = (loader: Loader, fieldName: string | null | undefined)
     }
 
     // 離散（整数）とみなす
-    if (k <= 12) {
+    if (k <= 8) {
         return "okabe-ito";
     } else {
         return "glasbey";

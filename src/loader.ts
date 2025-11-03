@@ -85,8 +85,9 @@ class Loader {
 
     private detectionCount_: number = 0;
     private detectionDone_: boolean = false;
-    private static readonly TYPE_DETECT_COUNT = 2048;
-    private static readonly REPORT_INTERVAL = 1024 * 256;
+    private static readonly TYPE_DETECT_COUNT_ = 100000;
+    get typeDetectLineNum() { return Loader.TYPE_DETECT_COUNT_; }
+    private static readonly REPORT_INTERVAL_ = 1024 * 256;
     private startTime_: number = 0;
     private reader_: FileLineReader | null = null;
 
@@ -138,7 +139,7 @@ class Loader {
         reader.load(
             (line: string) => { // onLineRead
                 this.parseLine_(line);
-                if (this.lineNum % Loader.REPORT_INTERVAL === 0) {
+                if (this.lineNum % Loader.REPORT_INTERVAL_ === 0) {
                     this.dataViewInvalidated_ = true;   // max を更新した可能性があるので invalidate
                     progressCallback(reader.getProgress(), this.lineNum);
                 }
@@ -212,7 +213,7 @@ class Loader {
                 values.forEach((raw, index) => {
                     this.detectType_(this.headers_[index], raw ?? ""); // null or undefined to empty string
                 });
-                if (this.detectionCount_ === Loader.TYPE_DETECT_COUNT) {
+                if (this.detectionCount_ === Loader.TYPE_DETECT_COUNT_) {
                     this.finalizeTypes_();
                 }
             } else {
@@ -249,7 +250,7 @@ class Loader {
     private finalizeTypes_(): void {
         this.headers_.forEach((header, index) => {
             // 文字列の出現パターン数をカウントし，一定割合を超えていたら raw string に
-            if (Object.keys(this.rawStringMap_[header]).length > Loader.TYPE_DETECT_COUNT / 3) {
+            if (Object.keys(this.rawStringMap_[header]).length > Loader.TYPE_DETECT_COUNT_ / 3) {
                 this.detection_[header] = ColumnType.RAW_STRING;
             }
 
