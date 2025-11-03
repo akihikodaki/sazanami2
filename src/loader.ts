@@ -3,7 +3,8 @@ import { inferViewDefinition, ViewDefinition, DataView, isEqualViewDefinition, c
 
 // STRING_CODE は，同一の文字列に対して連続したコードを割り当てる
 // 文字列が多い場合は RAW_STRING にする
-enum ColumnType { INTEGER, HEX, STRING_CODE, RAW_STRING};
+// 数値のパターン数が少ない場合，INT_CODE にする
+enum ColumnType { INTEGER, HEX, STRING_CODE, INT_CODE, RAW_STRING};
 
 class ColumnStats {
     min: number = Infinity;
@@ -27,6 +28,9 @@ class ColumnBuffer {
     stringToCodeDict: { [value: string]: number };  // 文字列に対応する code を格納
     codeToStringList: string[];                     // code に対応する文字列のリスト
 
+    intToCodeDict: { [value: string]: number };  // 整数に対応する code を格納
+    codeToIntList: number[];                     // code に対応する整数のリスト
+
     // 統計情報
     stat: ColumnStats;
 
@@ -36,6 +40,8 @@ class ColumnBuffer {
         this.type = ColumnType.INTEGER; // 初期は整数列
         this.stringToCodeDict = {};
         this.codeToStringList = [];
+        this.intToCodeDict = {};
+        this.codeToIntList = [];
         this.rawStringList = [];
         this.stat = new ColumnStats();
     }
@@ -46,6 +52,9 @@ class ColumnBuffer {
         } else if (this.type === ColumnType.STRING_CODE) {
             const code = this.buffer[index];
             return this.codeToStringList[code];
+        } else if (this.type === ColumnType.INT_CODE) {
+            const code = this.buffer[index];
+            return this.codeToIntList[code].toString();
         } else {
             return this.buffer[index].toString();
         }
@@ -219,7 +228,7 @@ class Loader {
             } else {
                 values.forEach((raw, index) => {
                     const val = raw ?? "";
-                    this.pushValue(index, val);
+                    this.pushValue(index, val, false);
                 });
             }
 
@@ -254,11 +263,20 @@ class Loader {
                 this.detection_[header] = ColumnType.RAW_STRING;
             }
 
+            let isOrgHex = this.detection_[header] === ColumnType.HEX;
+            if (this.detection_[header] === ColumnType.INTEGER || this.detection_[header] === ColumnType.HEX) {
+                // 整数列の場合，出現パターン数が少なければ INT_CODE に変更
+                const uniqueCount = new Set(this.rawBuffer_[header]).size;
+                if (uniqueCount < 32) {
+                    this.detection_[header] = ColumnType.INT_CODE;
+                }
+            }
+
             const type = this.detection_[header];
             this.columnsArr_[index].type = type;
             // rawBufferからデータをバッファへ反映
             this.rawBuffer_[header].forEach(val => {
-                this.pushValue(index, val);
+                this.pushValue(index, val, isOrgHex);
             });
             delete this.rawBuffer_[header];
         });
@@ -266,12 +284,14 @@ class Loader {
         this.onFormatDetected_?.();
     }
 
-    private pushValue(index: number, raw: string): void {
+    private pushValue(index: number, raw: string, isOrgHex: boolean): void {
         const col = this.columnsArr_[index];
         if (col.type === ColumnType.INTEGER || col.type === ColumnType.HEX) {
             this.pushBufferValue_(index, raw);
         } else if (col.type === ColumnType.STRING_CODE) {
             this.pushStringCode_(index, raw);
+        } else if (col.type === ColumnType.INT_CODE) {
+            this.pushIntCode_(index, raw, isOrgHex);
         } else {
             this.pushRawString_(index, raw);
         }
@@ -320,6 +340,32 @@ class Loader {
             code = strList.length;
             codeDict[raw] = code;
             strList.push(raw);
+        }
+        // bufferに追加
+        const col = this.columnsArr_[index];
+        if (col.length >= col.buffer.length) {
+            this.resizeBuffer_(index);
+        }
+        col.buffer[col.length] = code;
+        col.length++;
+
+        // stats更新
+        const stat = col.stat;
+        if (code > stat.max) stat.max = code;
+        if (code < stat.min) stat.min = code;
+    }
+
+    private pushIntCode_(index: number, raw: string, isHex = false): void {
+        const codeDict = this.columnsArr_[index].intToCodeDict;
+        const strList = this.columnsArr_[index].codeToIntList;
+        let code: number;
+        let val = isHex ? parseInt(raw, 16) : parseInt(raw, 10);
+        if (codeDict.hasOwnProperty(val)) {
+            code = codeDict[val];
+        } else {
+            code = strList.length;
+            codeDict[val] = code;
+            strList.push(val);
         }
         // bufferに追加
         const col = this.columnsArr_[index];

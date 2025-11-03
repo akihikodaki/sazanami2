@@ -145,6 +145,7 @@ const colorCategory = (name: string, type: ColumnType | "DERIVED" | "INDEX"): Co
         case ColumnType.HEX:
             return "int";
         case ColumnType.STRING_CODE:
+        case ColumnType.INT_CODE:
         default:
             return "code";
     }
@@ -157,6 +158,7 @@ const typeBadgeText = (t: ColumnType | "DERIVED" | "INDEX") => {
         case ColumnType.INTEGER: return "int";
         case ColumnType.HEX: return "hex";
         case ColumnType.STRING_CODE: return "code";
+        case ColumnType.INT_CODE: return "code";
         default: return "col";
     }
 };
