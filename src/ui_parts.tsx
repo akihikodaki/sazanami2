@@ -4,8 +4,8 @@ import ViewDefinitionEditor from "./view_definition_editor";
 
 
 import { fileOpen } from "browser-fs-access";
-import {Nav, Navbar, NavDropdown} from "react-bootstrap";
-import { Modal } from "react-bootstrap";
+import { Nav, Navbar, NavDropdown, Accordion, Modal } from "react-bootstrap";
+import { INITIAL_RENDERER_CONTEXT } from "./canvas_renderer";
 
 // react-icons 経由でアイコンをインポートすると，webpack でのビルド時に必要なアイコンのみがバンドルされる
 import { BsList, BsX, BsArrowsFullscreen, BsJournalText, BsTrash, BsPalette } from 'react-icons/bs';
@@ -320,32 +320,6 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
     );
 };
 
-const SettingsPanel: React.FC<{ store: Store }> = ({ store }) => {
-    return (
-        <div style={{ 
-            display: "flex", flexDirection: "column", height: "100%" 
-        }}>
-            {/* Header */}
-            <div
-                className="settings-header"
-                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 9px" }}
-            >
-                <div style={{ fontWeight: 600 }}>Settings</div>
-                <button
-                    onClick={() => store.trigger(ACTION.SHOW_SETTINGS, false)}
-                    className="settings-close" 
-                >
-                    <BsX size={16} />
-                </button>
-            </div>
-
-            {/* Body → ViewDefinitionEditor */}
-            <div className="settings-body" style={{ padding: 9, overflow: "auto" }}>
-                <ViewDefinitionEditor store={store} />
-            </div>
-        </div>
-    );
-};
 
 type Props = {
     store: Store;
@@ -459,4 +433,4 @@ const LogOverlay: React.FC<Props> = ({ store, width = 420, height = 120 }) => {
     );
 };
 
-export {ToolBar, StatusBar, LoadingBar, VersionDialog, HelpDialog, SplitContainer, SettingsPanel, LogOverlay};
+export {ToolBar, StatusBar, LoadingBar, VersionDialog, HelpDialog, SplitContainer, LogOverlay};

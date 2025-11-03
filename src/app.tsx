@@ -2,7 +2,8 @@
 import React, { useRef, useEffect } from "react";
 import Store, { ACTION } from "./store";
 
-import {StatusBar, ToolBar, LoadingBar, VersionDialog, HelpDialog, SettingsPanel, SplitContainer, LogOverlay} from "./ui_parts";
+import {StatusBar, ToolBar, LoadingBar, VersionDialog, HelpDialog, SplitContainer, LogOverlay} from "./ui_parts";
+import SettingsPanel from "./setting_panel";
 import ColorLegend from "./color_legend";
 
 import MainCanvas from "./main_canvas";

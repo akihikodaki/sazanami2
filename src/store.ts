@@ -150,6 +150,8 @@ class Store {
                     // 進捗
                     this.trigger(CHANGE.FILE_LOAD_PROGRESS, percent);
                     this.trigger(CHANGE.SHOW_MESSAGE_IN_STATUS_BAR, `${Math.floor(percent * 100)}% Loaded`);
+                    this.trigger(ACTION.UPDATE_RENDERER_CONTEXT, 
+                        { ...this.state_.renderCtx, numRows: this.loader.numRows });
                     this.trigger(CHANGE.CONTENT_UPDATED);
                 },
                 (err) => {
@@ -197,6 +199,7 @@ class Store {
         this.on(ACTION.UPDATE_RENDERER_CONTEXT, (renderCtx: RendererContext) => {
             if (renderCtx === this.state_.renderCtx) return; // 変更なし最適化
             this.patchState({ renderCtx });
+            this.trigger(CHANGE.CONTENT_UPDATED);
         });
 
         // data_view.ts のバリデーションを用いて厳密チェックし、初期化が通るかを確認する

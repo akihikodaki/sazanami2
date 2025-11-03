@@ -1,3 +1,4 @@
+// canvas_renderer.ts
 import { Loader, DataView } from "./loader";
 import { RectRendererSoft, RectRendererWebGL } from "./rect_renderer";
 
@@ -12,6 +13,8 @@ type RendererContext = Readonly<{
     scaleXLog: number;
     scaleYLog: number;
     numRows: number;
+    minPlotWidth: number;
+    minPlotHeight: number;
 }>;
 
 // 既定値
@@ -23,6 +26,8 @@ const INITIAL_RENDERER_CONTEXT: RendererContext = {
     scaleXLog: Math.log(20),
     scaleYLog: 0,
     numRows: 0,
+    minPlotWidth: 1,
+    minPlotHeight: 1,
 };
 
 // ヘルパ
@@ -183,8 +188,8 @@ class CanvasRenderer {
         const ratioY = 1 / scaleYVal; 
 
         // データ描画用ピクセルサイズ
-        const pxW = Math.max(scaleXVal, 1);
-        const pxH = Math.max(scaleYVal, 0.5);
+        const pxW = Math.max(scaleXVal, renderCtx.minPlotWidth);
+        const pxH = Math.max(scaleYVal, renderCtx.minPlotHeight);
 
         // 描画セルの start/end インデックス
         const xStart = Math.floor((offsetX - this.MARGIN_LEFT_) / scaleXVal);

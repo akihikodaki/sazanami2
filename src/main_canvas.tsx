@@ -561,8 +561,6 @@ const MainCanvas: React.FC<{ store: Store }> = ({ store }) => {
             if (!store.state.viewDef) {
                 return; // まだフォーマットが確定しておらずビュー定義がない
             }
-            const next = { ...store.state.renderCtx, numRows: store.loader.numRows };
-            store.trigger(ACTION.UPDATE_RENDERER_CONTEXT, next);
             draw();
         };
         store.on(CHANGE.FILE_LOADED, onContentUpdated);
