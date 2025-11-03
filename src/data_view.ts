@@ -56,6 +56,7 @@ const isEqualViewDefinition = (a: ViewDefinition, b: ViewDefinition): boolean =>
 // 内部で共有する最小インタフェース
 interface NumberColumn {
     getNumber(i: number): number;
+    getString(index: number): string;
     stat: { min: number; max: number, deviationFromMax: number };
 }
 
@@ -71,6 +72,10 @@ class IndexColumn implements NumberColumn {
 
     getNumber(i: number): number {
         return i;
+    }
+
+    getString(i: number): string {
+        return this.getNumber(i).toString();
     }
 }
 
@@ -222,6 +227,10 @@ class ExpressionColumn implements NumberColumn {
 
     getNumber(i: number): number {
         return this.projector_.value(i);
+    }
+
+    getString(i: number): string {
+        return this.getNumber(i).toString();
     }
 }
 
