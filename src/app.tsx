@@ -3,6 +3,8 @@ import React, { useRef, useEffect } from "react";
 import Store, { ACTION } from "./store";
 
 import {StatusBar, ToolBar, LoadingBar, VersionDialog, HelpDialog, SettingsPanel, SplitContainer, LogOverlay} from "./ui_parts";
+import ColorLegend from "./color_legend";
+
 import MainCanvas from "./main_canvas";
 
 const App = () => {
@@ -67,6 +69,7 @@ const App = () => {
                     leftPanel={<MainCanvas store={storeRef.current} />}
                     rightPanel={<SettingsPanel store={storeRef.current} />}
                 />
+                <ColorLegend store={storeRef.current} />
                 <LogOverlay store={storeRef.current} />
                 <StatusBar store={storeRef.current} />
             </div>

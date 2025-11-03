@@ -439,6 +439,8 @@ export class DataView {
     getMaxColor(): number { return this.colorCol_ ? this.colorCol_.stat.max : 0; }
     getMinColor(): number { return this.colorCol_ ? this.colorCol_.stat.min : 0; }
 
+    isColorContinuous(): boolean { return this.paletteContinuous_; }
+
     get definition() { return this.def_; }
 }
 

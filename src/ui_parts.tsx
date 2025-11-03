@@ -8,7 +8,7 @@ import {Nav, Navbar, NavDropdown} from "react-bootstrap";
 import { Modal } from "react-bootstrap";
 
 // react-icons 経由でアイコンをインポートすると，webpack でのビルド時に必要なアイコンのみがバンドルされる
-import { BsList, BsX, BsArrowsFullscreen, BsJournalText, BsTrash } from 'react-icons/bs';
+import { BsList, BsX, BsArrowsFullscreen, BsJournalText, BsTrash, BsPalette } from 'react-icons/bs';
 
 const ToolBar = (props: {store: Store;}) => {
     let store = props.store;
@@ -36,6 +36,7 @@ const ToolBar = (props: {store: Store;}) => {
         case "menu_settings": store.trigger(ACTION.SHOW_SETTINGS, !store.state.showSettings); break;
         case "menu_fit": store.trigger(ACTION.CANVAS_FIT); break;
         case "menu_debug_overlay_toggle": store.trigger(ACTION.SHOW_LOG_OVERLAY, !store.state.showDebugOverlay); break;
+        case "menu_legend_toggle": store.trigger(ACTION.SHOW_COLOR_LEGEND); break;
         }
         setSelectedKey(0);
     };
@@ -81,6 +82,13 @@ const ToolBar = (props: {store: Store;}) => {
             >
                 <Nav.Link className="nav-link tool-bar-link" eventKey="menu_fit">
                     <BsArrowsFullscreen size={14} /> Fit
+                </Nav.Link>
+                <Nav.Link
+                    className="nav-link tool-bar-link"
+                    eventKey="menu_legend_toggle"
+                    title="Show/Hide legend"
+                >
+                    <BsPalette size={14} /> Legend
                 </Nav.Link>
                 <Nav.Link
                     className="nav-link tool-bar-link"

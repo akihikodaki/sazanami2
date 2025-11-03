@@ -24,6 +24,7 @@ enum ACTION {
     SHOW_LOG_OVERLAY,       // デバッグオーバーレイの表示/非表示
     SETTINGS_SAVE_REQUEST,  // 設定保存リクエスト
     UPDATE_RENDERER_CONTEXT,    // RendererContext の更新
+    SHOW_COLOR_LEGEND,         // カラーレジェンドの表示/非表示
     ACTION_END, // 末尾
 };
 
