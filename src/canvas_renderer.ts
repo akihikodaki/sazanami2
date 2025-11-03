@@ -56,71 +56,76 @@ class CanvasRenderer {
     }
 
     // 共通ヘルパー：対数スケールでのズーム＆オフセット更新
-    private applyZoom(
+    applyZoom(
         renderCtx: RendererContext,
         mouseX: number,
         mouseY: number,
-        zoomIn: boolean,
-        divisions: number,
-        axes: { x?: boolean; y?: boolean }  // どの軸をズームするか
+        axes: { x: number; y: number }  // どの軸をズームするか
     ): RendererContext {
-        const base = this.ZOOM_STEP_LOG_;
-        const step = base / Math.max(1, Math.floor(divisions));
-        const dir = zoomIn ? 1 : -1;
-
         // 変更前スケール（オフセット更新で使用）
         const prevX = scaleX(renderCtx.scaleXLog);
         const prevY = scaleY(renderCtx.scaleYLog);
 
-        // 1) ログスケールの更新（イミュータブル更新のため一旦次状態を作る）
-        const nextScaleXLog = axes.x ? renderCtx.scaleXLog + dir * step : renderCtx.scaleXLog;
-        const nextScaleYLog = axes.y ? renderCtx.scaleYLog + dir * step : renderCtx.scaleYLog;
-
         // 変更後スケール
-        const newX = scaleX(nextScaleXLog);
-        const newY = scaleY(nextScaleYLog);
+        const newX = scaleX(axes.x);
+        const newY = scaleY(axes.y);
 
         // 2) マウス位置を基準にオフセット調整
         let nextOffsetX = renderCtx.offsetX;
         let nextOffsetY = renderCtx.offsetY;
 
-        if (axes.x) {
-            const relX = mouseX - this.MARGIN_LEFT_ + renderCtx.offsetX;
-            // prevX が 0 に極端に近い場合のガード（念のため）
-            const safePrevX = Math.abs(prevX) < 1e-12 ? 1e-12 : prevX;
-            nextOffsetX = relX * (newX / safePrevX) - (mouseX - this.MARGIN_LEFT_);
-        }
-        if (axes.y) {
-            const relY = mouseY + renderCtx.offsetY;
-            const safePrevY = Math.abs(prevY) < 1e-12 ? 1e-12 : prevY;
-            nextOffsetY = relY * (newY / safePrevY) - mouseY;
-        }
+        const relX = mouseX - this.MARGIN_LEFT_ + renderCtx.offsetX;
+        // prevX が 0 に極端に近い場合のガード（念のため）
+        const safePrevX = Math.abs(prevX) < 1e-12 ? 1e-12 : prevX;
+        nextOffsetX = relX * (newX / safePrevX) - (mouseX - this.MARGIN_LEFT_);
+
+        const relY = mouseY + renderCtx.offsetY;
+        const safePrevY = Math.abs(prevY) < 1e-12 ? 1e-12 : prevY;
+        nextOffsetY = relY * (newY / safePrevY) - mouseY;
 
         // 新しいコンテキストを返す（イミュータブル）
         return {
             ...renderCtx,
-            scaleXLog: nextScaleXLog,
-            scaleYLog: nextScaleYLog,
+            scaleXLog: axes.x,
+            scaleYLog: axes.y,
             offsetX: nextOffsetX,
             offsetY: nextOffsetY,
         };
+    }
+
+    private applyZoomDiv(
+        renderCtx: RendererContext,
+        mouseX: number,
+        mouseY: number,
+        zoomIn: boolean,
+        divisions: number,
+        axes: { x?: boolean | null; y?: boolean | null }  // どの軸をズームするか
+    ): RendererContext {
+        const base = this.ZOOM_STEP_LOG_;
+        const step = base / Math.max(1, Math.floor(divisions));
+        const dir = zoomIn ? 1 : -1;
+
+        return this.applyZoom(renderCtx, mouseX, mouseY, {
+            x: axes.x ? renderCtx.scaleXLog + dir * step : renderCtx.scaleXLog,
+            y: axes.y ? renderCtx.scaleYLog + dir * step : renderCtx.scaleYLog
+        });
     }
 
     // ===== ラッパー関数（既存API互換） =====
 
     // uniform zoom（縦横両方：対数スケール）
     zoomUniform(renderCtx: RendererContext, mouseX: number, mouseY: number, zoomIn: boolean, divs: number = 1): RendererContext {
-        return this.applyZoom(renderCtx, mouseX, mouseY, zoomIn, divs, { x: true, y: true });
+        return this.applyZoomDiv(renderCtx, mouseX, mouseY, zoomIn, divs, { x: true, y: true });
     }
 
     // horizontal-only zoom（対数スケール）
     zoomHorizontal(renderCtx: RendererContext, mouseX: number, mouseY: number, zoomIn: boolean, divs: number = 1): RendererContext {
-        return this.applyZoom(renderCtx, mouseX, mouseY, zoomIn, divs, { x: true });
+        return this.applyZoomDiv(renderCtx, mouseX, mouseY, zoomIn, divs, { x: true });
     }
 
     // vertical-only zoom（対数スケール）
     zoomVertical(renderCtx: RendererContext, mouseX: number, mouseY: number, zoomIn: boolean, divs: number = 1): RendererContext {
-        return this.applyZoom(renderCtx, mouseX, mouseY, zoomIn, divs, { y: true });
+        return this.applyZoomDiv(renderCtx, mouseX, mouseY, zoomIn, divs, { y: true });
     }
 
     // 10進で上位2桁を 1, 2, 5, 10 のいずれかに丸めて「見やすい数値」を返す
