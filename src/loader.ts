@@ -12,8 +12,19 @@ class ColumnStats {
     deviationFromMax = 0;   // その時の最大値との偏差
 }
 
+
+// 内部で共有する最小インタフェース
+export interface ColumnInterface {
+    getNumber(i: number): number;
+    getString(index: number): string;
+    stat: { min: number; max: number, deviationFromMax: number };
+
+    codeToStringList: string[];                     // code に対応する文字列のリスト
+    codeToIntList: number[];                        // code に対応する整数のリスト
+}
+
 // 動的に拡張可能なバッファ
-class ColumnBuffer {
+class ColumnBuffer implements ColumnInterface {
     private static readonly INITIAL_CAPACITY = 1024;
 
     // 格納タイプに応じて，buffer か string で持つかを変える
@@ -417,11 +428,11 @@ class Loader {
         return this.headers_;
     }
 
-    public get columns(): ColumnBuffer[] {
+    public get columns(): ColumnInterface[] {
         return this.columnsArr_;
     }
 
-    public columnFromName(name: string): ColumnBuffer {
+    public columnFromName(name: string): ColumnInterface {
         return this.columnsArr_[this.headerIndex_[name]];
     }
 

@@ -1,5 +1,5 @@
 // data_view.ts
-import { Loader, ColumnBuffer } from "./loader";
+import { Loader, ColumnBuffer, ColumnType, ColumnInterface  } from "./loader";
 import { buildPaletteByName, inferColorMapName } from "./color_map";
 
 // 軸と色の仕様
@@ -53,15 +53,8 @@ const isEqualViewDefinition = (a: ViewDefinition, b: ViewDefinition): boolean =>
     return true;
 };
 
-// 内部で共有する最小インタフェース
-interface NumberColumn {
-    getNumber(i: number): number;
-    getString(index: number): string;
-    stat: { min: number; max: number, deviationFromMax: number };
-}
-
 // 行インデクスを返す仮想カラム
-class IndexColumn implements NumberColumn {
+class IndexColumn implements ColumnInterface {
     stat: { min: number; max: number, deviationFromMax: number };
     private nRows_: number;
 
@@ -77,13 +70,16 @@ class IndexColumn implements NumberColumn {
     getString(i: number): string {
         return this.getNumber(i).toString();
     }
+    get codeToStringList(): string[] { return [];}
+    get codeToIntList(): number[] { return []; }
+
 }
 
 // 仮想列で使用する式エンジン
 class ExpressionProjector {
     private expr_ = "";
     private varNames_: string[] = [];
-    private cols_: NumberColumn[] = [];
+    private cols_: ColumnInterface[] = [];
     private compiledExp_!: (...args: number[]) => number;
     private fastExp_: ((i: number) => number) | null = null;
     private numRows_ = 0;
@@ -134,7 +130,7 @@ class ExpressionProjector {
         return rewritten;
     }
 
-    init(resolveColumn: (name: string) => NumberColumn, expr: string, numRows: number) {
+    init(resolveColumn: (name: string) => ColumnInterface, expr: string, numRows: number) {
         this.expr_ = expr.trim();
         this.numRows_ = numRows;
 
@@ -214,7 +210,7 @@ class ExpressionProjector {
 }
 
 // 式の評価結果を返す仮想数値カラム 
-class ExpressionColumn implements NumberColumn {
+class ExpressionColumn implements ColumnInterface {
     readonly name: string;
     private projector_: ExpressionProjector;
     stat: { min: number; max: number, deviationFromMax: number };
@@ -232,13 +228,16 @@ class ExpressionColumn implements NumberColumn {
     getString(i: number): string {
         return this.getNumber(i).toString();
     }
+
+    get codeToStringList(): string[] { return [];}
+    get codeToIntList(): number[] { return []; }
 }
 
 // 仮想カラムレジストリ
 // 仮想列は他の仮想列を参照不可
 class VirtualColumnRegistry {
     private defs_ = new Map<string, string>();           // name → expr
-    private columns_ = new Map<string, NumberColumn>();   // name → 実体
+    private columns_ = new Map<string, ColumnInterface>();   // name → 実体
     private loader_!: Loader;
     private numRows_ = 0;
 
@@ -266,13 +265,13 @@ class VirtualColumnRegistry {
             throw new Error(errors.join("\n"));
         }
 
-        const resolveColumn = (name: string): NumberColumn => {
+        const resolveColumn = (name: string): ColumnInterface => {
             if (name === "__index__") return new IndexColumn(this.numRows_);
             // 仮想列参照は不可（仕様）
             if (this.defs_.has(name) || this.columns_.has(name)) {
                 throw new Error(`Virtual column may not reference another virtual column: ${name}`);
             }
-            const col = this.loader_.columnFromName(name) as unknown as NumberColumn;
+            const col = this.loader_.columnFromName(name);
             if (!col || typeof col.getNumber !== "function") {
                 throw new Error(`Unknown column: ${name}`);
             }
@@ -287,7 +286,7 @@ class VirtualColumnRegistry {
         }
     }
 
-    get(name: string): NumberColumn | undefined {
+    get(name: string): ColumnInterface | undefined {
         return this.columns_.get(name);
     }
 }
@@ -297,9 +296,12 @@ class VirtualColumnRegistry {
 export class DataView {
     private def_!: ViewDefinition;
     private numRows_ = 0;
-    private xCol_!: NumberColumn;
-    private yCol_!: NumberColumn;
-    private colorCol_: NumberColumn | null = null;
+    private xCol_!: ColumnInterface;
+    private yCol_!: ColumnInterface;
+    private colorCol_: ColumnInterface | null = null;
+    private loaderRef_!: Loader;
+    private resolveByName_!: (name: string) => ColumnInterface;
+    private types_: { [column: string]: ColumnType } = {};
 
     // 内部レジストリ
     private registry_ = new VirtualColumnRegistry();
@@ -324,7 +326,7 @@ export class DataView {
         if (this.initialized_) {
             throw new Error("DataView has already been initialized.");
         }
-
+        this.loaderRef_ = loader;
         const spec = def.view;
         const columns = def.columns ?? {};
 
@@ -346,16 +348,17 @@ export class DataView {
         }
 
         // 列解決
-        const resolveByName = (name: string): NumberColumn => {
+        const resolveByName = (name: string): ColumnInterface => {
             if (name === "__index__") return new IndexColumn(this.numRows_);
             const vcol = this.registry_.get(name);
             if (vcol) return vcol;
-            let col = loader.columnFromName(name) as unknown as NumberColumn;
+            let col = loader.columnFromName(name);
             if (!col) {
                 col = new IndexColumn(this.numRows_); // フォールバックとして行インデクス列
             }
             return col;
         };
+        this.resolveByName_ = resolveByName;
 
         this.xCol_ = resolveByName(spec.axisXField);
         this.yCol_ = resolveByName(spec.axisYField);
@@ -372,6 +375,14 @@ export class DataView {
         this.paletteContinuous_ = palInfo[1];
 
         this.def_ = { view: { ...spec }, columns: { ...columns } };
+
+        // types 構築：実列 + 仮想列 + __index__
+        this.types_ = { ...loader.types };
+        for (const vName of this.registry_.list()) {
+            this.types_[vName] = ColumnType.INTEGER; // 仮想列は数式で得られる数値列として扱う
+        }
+        this.types_["__index__"] = ColumnType.INTEGER; // 便宜上、仮想インデックス列も整数として公開
+
 
         this.initialized_ = true; // 以降は読み取り専用
     }
@@ -411,7 +422,7 @@ export class DataView {
     }
 
     // 2分探索
-    lowerBound_(col: NumberColumn, target: number): number {
+    lowerBound_(col: ColumnInterface, target: number): number {
         let lo = 0;
         let hi = this.numRows_;
         while (lo < hi) {
@@ -450,6 +461,13 @@ export class DataView {
 
     isColorContinuous(): boolean { return this.paletteContinuous_; }
 
+    columnFromName(name: string): ColumnInterface {
+        if (!this.initialized_) {
+            throw new Error("DataView is not initialized yet.");
+        }
+        return this.resolveByName_(name);
+    }
+    get types(): { [column: string]: ColumnType } { return this.types_; }
     get definition() { return this.def_; }
 }
 
@@ -477,7 +495,7 @@ const inferViewDefinition = (loader: Loader): ViewDefinition => {
     const findHeader = (headers: string[], name: string) => headers.find(h => eqCI(h, name)) ?? null;
     const hasAll = (headers: string[], names: string[]) => names.every(n => headers.some(h => eqCI(h, n)));
 
-    const base = (name: string) => (loader.columnFromName(name) as ColumnBuffer).stat.max + 1;
+    const base = (name: string) => loader.columnFromName(name).stat.max + 1;
 
     // OpenCL 形：x = cu * (max(wf)+1) + wf, y = cycle
     if (hasAll(h, ["cycle", "cu", "wf"])) {

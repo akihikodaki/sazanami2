@@ -101,9 +101,9 @@ const ColorLegend: React.FC<Props> = ({
             };
         }
 
-        const types = store.loader.types as Record<string, ColumnType>;
+        const types = dv.types;
         const t = types[colorField];
-        const col = store.loader.columnFromName(colorField);
+        const col = dv.columnFromName(colorField);
 
         type Item = { label: string; idx: number };
         const items: Item[] = [];
