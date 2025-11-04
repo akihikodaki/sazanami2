@@ -440,15 +440,29 @@ export class DataView {
         // 最大偏差率が小さい方を選ぶ
         let xDeviationFromMax_ = this.xCol_.stat.deviationFromMax / (this.xCol_.stat.max - this.xCol_.stat.min);
         let yDeviationFromMax_ = this.yCol_.stat.deviationFromMax / (this.yCol_.stat.max - this.yCol_.stat.min);
+
+        // 最大偏差分を引く
+        xIndexStart -= this.xCol_.stat.deviationFromMax;
+        yIndexStart -= this.yCol_.stat.deviationFromMax;
+
+        if (xDeviationFromMax_ == yDeviationFromMax_ ) 
+            return Math.min(xIndexStart, yIndexStart); // 偏差が同じなら小さい方
         return xDeviationFromMax_ > yDeviationFromMax_ ? yIndexStart : xIndexStart;
     }
 
     getEndIdx(xEnd: number, yEnd: number): number {
         let xIndexEnd = Math.min(this.lowerBound_(this.xCol_, xEnd), this.numRows_);
         let yIndexEnd = Math.min(this.lowerBound_(this.yCol_, yEnd), this.numRows_);
+
+        // 最大偏差分を足す
+        xIndexEnd += this.xCol_.stat.deviationFromMax;
+        yIndexEnd += this.yCol_.stat.deviationFromMax;
+
         // 最大偏差率が小さい方を選ぶ
         let xDeviationFromMax_ = this.xCol_.stat.deviationFromMax / (this.xCol_.stat.max - this.xCol_.stat.min);
         let yDeviationFromMax_ = this.yCol_.stat.deviationFromMax / (this.yCol_.stat.max - this.yCol_.stat.min);
+        if (xDeviationFromMax_ == yDeviationFromMax_ ) 
+            return Math.max(xIndexEnd, yIndexEnd); // 偏差が同じなら大きい方
         return xDeviationFromMax_ > yDeviationFromMax_ ? yIndexEnd : xIndexEnd;
     }
 
