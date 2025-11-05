@@ -66,6 +66,8 @@ class ColumnBuffer implements ColumnInterface {
         } else if (this.type === ColumnType.INT_CODE) {
             const code = this.buffer[index];
             return this.codeToIntList[code].toString();
+        } else if (this.type === ColumnType.HEX) {
+            return `0x${this.buffer[index].toString(16)}`;
         } else {
             return this.buffer[index].toString();
         }
