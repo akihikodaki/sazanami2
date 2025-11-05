@@ -1,7 +1,7 @@
 // color_legend.tsx
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Store, { CHANGE, ACTION } from "./store";
-import { ColumnType } from "./loader";
+import { columnString } from "./loader";
 
 type Props = {
     store: Store;
@@ -113,10 +113,10 @@ const ColorLegend: React.FC<Props> = ({
             pairs.sort((a, b) => (a.value < b.value ? -1 : a.value > b.value ? 1 : a.code - b.code));
             for (let i = 0; i < Math.min(pairs.length, maxCategories); i++) {
                 const { value, code } = pairs[i];
-                items.push({ label: `${value} (${code})`, idx: modIndex(code, palette.length) });
+                items.push({ label: `${t.toString(value)} (${code})`, idx: modIndex(code, palette.length) });
             }
         } else {
-            if (t === ColumnType.STRING) {
+            if (t === columnString) {
                 const seen = new Set<string>();
                 const scan = Math.min(store.loader.numRows, maxCategories * 4);
                 for (let i = 0; i < scan && items.length < maxCategories; i++) {

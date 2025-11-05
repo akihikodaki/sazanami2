@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Store, { ACTION, CHANGE } from "./store";
 import { ViewDefinition, DataView, inferViewDefinition, createDataView } from "./data_view";
-import { ColumnType } from "./loader";
+import { columnInteger, columnHex, columnString, ColumnType } from "./loader";
 import { Modal, Dropdown } from "react-bootstrap";
 import {
     BsPlus,
@@ -142,7 +142,7 @@ type ColorCat = "index" | "int" | "code" | "exp";
 const colorCategory = (name: string, { type, code }: ViewType): ColorCat => {
     if (name === "__index__" || type === "INDEX") return "index";
     if (type === "DERIVED") return "exp";
-    return type == ColumnType.STRING || code ? "code" : "int";
+    return type == columnString || code ? "code" : "int";
 }
 
 const typeBadgeText = ({ type, code }: ViewType) => {
@@ -150,8 +150,8 @@ const typeBadgeText = ({ type, code }: ViewType) => {
     if (type === "INDEX") return "index";
     if (code) return "code";
     switch (type) {
-        case ColumnType.INTEGER: return "int";
-        case ColumnType.HEX: return "hex";
+        case columnInteger: return "int";
+        case columnHex: return "hex";
         default: return "col";
     }
 };
@@ -165,7 +165,7 @@ const buildPalette = (store: Store, current: ViewDefinition | null, search: stri
     // 実列：RAW_STRING は除外（数値化不可）
     const real: PaletteItem[] = headers
         .map(h => ({ name: h, kind: "real", type: { type: typesMap[h], code: store.loader.columnFromName(h).codeToValueList != null } }) as PaletteItem)
-        .filter(({ type }) => type.type !== ColumnType.STRING || type.code);
+        .filter(({ type }) => type.type !== columnString || type.code);
 
     // __index__ と派生列（現在の定義から）
     const indexItem: PaletteItem = { name: "__index__", kind: "index", type: { type: "INDEX", code: false } };
@@ -259,7 +259,7 @@ const AxisCard: React.FC<{
             const raw = e.dataTransfer.getData("application/json") || e.dataTransfer.getData("text/plain");
             const data = JSON.parse(raw) as { name: string; type: ColumnType | "DERIVED" | "INDEX" };
             // 数値のみ受け入れ（RAW_STRING は Columns に出ないが念のためチェック）
-            const isNumeric = data.type === "DERIVED" || data.type === "INDEX" || data.type !== ColumnType.STRING;
+            const isNumeric = data.type === "DERIVED" || data.type === "INDEX" || data.type !== columnString;
             if (acceptNumeric && !isNumeric) {
                 setShine();
                 onReject("Type mismatch: this axis expects a numeric column.");
@@ -785,7 +785,7 @@ function resolveTypeOfName(
     const headers: string[] = store.loader?.headers ?? [];
     const typesMap: { [name: string]: ColumnType } = store.loader?.types ?? {};
     const code = store.loader.columnFromName(name).codeToValueList != null;
-    if (headers.includes(name)) return { type: typesMap[name] ?? ColumnType.INTEGER, code }; // 既定は数値扱い
+    if (headers.includes(name)) return { type: typesMap[name] ?? columnInteger, code }; // 既定は数値扱い
     return null;
 }
 

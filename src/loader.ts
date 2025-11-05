@@ -1,7 +1,25 @@
 import { FileLineReader, FileLineReaderOptions } from "./file_line_reader";
 import { inferViewDefinition, ViewDefinition, DataView, isEqualViewDefinition, createDataView } from "./data_view";
 
-enum ColumnType { INTEGER, HEX, STRING};
+export const columnInteger = {
+    toString(value: number | string) {
+        return value.toString();
+    }
+};
+
+export const columnHex = {
+    toString(value: number | string) {
+        return `0x${value.toString(16)}`;
+    }
+}
+
+export const columnString = {
+    toString(value: number | string) {
+        return value.toString();
+    }
+}
+
+type ColumnType = typeof columnInteger | typeof columnHex | typeof columnString;
 
 class ColumnStats {
     min: number = Infinity;
@@ -41,7 +59,7 @@ class ColumnBuffer implements ColumnInterface {
     constructor() {
         this.buffer = new Int32Array(ColumnBuffer.INITIAL_CAPACITY);
         this.length = 0;
-        this.type = ColumnType.INTEGER; // 初期は整数列
+        this.type = columnInteger; // 初期は整数列
         this.stringToCodeDict = {};
         this.intToCodeDict = {};
         this.codeToValueList = null;
@@ -51,16 +69,15 @@ class ColumnBuffer implements ColumnInterface {
 
     getString(index: number): string {
         const value = this.codeToValueList ? this.codeToValueList[this.buffer[index]] :
-                      this.type === ColumnType.STRING ? this.rawStringList[index] :
+                      this.type === columnString ? this.rawStringList[index] :
                       this.buffer[index];
 
-        return this.type === ColumnType.HEX ?
-               `0x${value.toString(16)}` : value.toString();
+        return this.type.toString(value);
     }
 
     getNumber(index: number): number {
         // 色づけの際にコードが取得される場合がある
-        if (!this.codeToValueList && this.type === ColumnType.STRING) {
+        if (!this.codeToValueList && this.type === columnString) {
             throw new Error("Cannot get number from string column");
         }
         return this.buffer[index];
@@ -182,7 +199,7 @@ class Loader {
         values.forEach((header, i) => {
             this.headerIndex_[header] = i;
             this.rawBuffer_[header] = [];
-            this.detection_[header] = ColumnType.INTEGER; // 初期は整数列
+            this.detection_[header] = columnInteger; // 初期は整数列
             this.rawStringMap_[header] = {};
         });
     }
@@ -241,15 +258,15 @@ class Loader {
         const isInt = /^-?\d+$/.test(value);
 
         // 16進数が現れたら HEX に変更
-        if (this.detection_[header] < ColumnType.HEX && isHex && !isInt) {
-            this.detection_[header] = ColumnType.HEX;
+        if (this.detection_[header] === columnInteger && isHex && !isInt) {
+            this.detection_[header] = columnHex;
         }
         // 数値じゃ無いものが1度でも現れたら STRING に変更
-        if (this.detection_[header] < ColumnType.STRING && !isHex && !isInt) {
-            this.detection_[header] = ColumnType.STRING;
+        if (this.detection_[header] !== columnString && !isHex && !isInt) {
+            this.detection_[header] = columnString;
         }
         // 文字列の出現パターン数をカウントし，finalizeTypes_ で判定
-        if (this.detection_[header] === ColumnType.STRING) {
+        if (this.detection_[header] === columnString) {
             this.rawStringMap_[header][value] += 1;
         }
     }
@@ -262,8 +279,8 @@ class Loader {
                 code = false;
             }
 
-            let isOrgHex = this.detection_[header] === ColumnType.HEX;
-            if (this.detection_[header] === ColumnType.INTEGER || this.detection_[header] === ColumnType.HEX) {
+            let isOrgHex = this.detection_[header] === columnHex;
+            if (this.detection_[header] === columnInteger || this.detection_[header] === columnHex) {
                 // 整数列の場合，出現パターン数が少なければ INT_CODE に変更
                 const uniqueCount = new Set(this.rawBuffer_[header]).size;
                 code = uniqueCount < 32;
@@ -288,12 +305,12 @@ class Loader {
     private pushValue(index: number, raw: string, isOrgHex: boolean): void {
         const col = this.columnsArr_[index];
         if (col.codeToValueList) {
-            if (col.type === ColumnType.STRING) {
+            if (col.type === columnString) {
                 this.pushStringCode_(col.codeToValueList, index, raw);
             } else {
                 this.pushIntCode_(col.codeToValueList, index, raw, isOrgHex);
             }
-        } else if (col.type === ColumnType.STRING) {
+        } else if (col.type === columnString) {
             this.pushRawString_(index, raw);
         } else {
             this.pushBufferValue_(index, raw);
@@ -313,7 +330,7 @@ class Loader {
     /** Int32Array bufferに数値を追加 (整数・16進 or 10進) */
     private pushBufferValue_(index: number, raw: string): void {
         const col = this.columnsArr_[index];
-        const num = col.type === ColumnType.HEX ? parseInt(raw, 16) : parseInt(raw, 10);
+        const num = col.type === columnHex ? parseInt(raw, 16) : parseInt(raw, 10);
         if (col.length >= col.buffer.length) {
             this.resizeBuffer_(index);
         }
