@@ -70,8 +70,7 @@ class IndexColumn implements ColumnInterface {
     getString(i: number): string {
         return this.getNumber(i).toString();
     }
-    get codeToStringList(): string[] { return [];}
-    get codeToIntList(): number[] { return []; }
+    get codeToValueList() { return null; }
 
 }
 
@@ -229,8 +228,7 @@ class ExpressionColumn implements ColumnInterface {
         return this.getNumber(i).toString();
     }
 
-    get codeToStringList(): string[] { return [];}
-    get codeToIntList(): number[] { return []; }
+    get codeToValueList() { return null; }
 }
 
 // 仮想カラムレジストリ

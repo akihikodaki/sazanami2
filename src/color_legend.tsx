@@ -108,38 +108,33 @@ const ColorLegend: React.FC<Props> = ({
         type Item = { label: string; idx: number };
         const items: Item[] = [];
 
-        if (t === ColumnType.STRING_CODE) {
-            const pairs = col.codeToStringList.map((text: string, code: number) => ({ text, code }));
-            pairs.sort((a, b) => (a.text < b.text ? -1 : a.text > b.text ? 1 : a.code - b.code));
+        if (col.codeToValueList) {
+            const pairs = col.codeToValueList.map((value, code) => ({ value, code }));
+            pairs.sort((a, b) => (a.value < b.value ? -1 : a.value > b.value ? 1 : a.code - b.code));
             for (let i = 0; i < Math.min(pairs.length, maxCategories); i++) {
-                const { text, code } = pairs[i];
-                items.push({ label: `${text} (${code})`, idx: modIndex(code, palette.length) });
-            }
-        } else if (t === ColumnType.INT_CODE) {
-            const pairs = col.codeToIntList.map((val: number, code: number) => ({ val, code }));
-            pairs.sort((a, b) => (a.val - b.val) || (a.code - b.code));
-            for (let i = 0; i < Math.min(pairs.length, maxCategories); i++) {
-                const { val, code } = pairs[i];
-                items.push({ label: `${val} (${code})`, idx: modIndex(code, palette.length) });
-            }
-        } else if (t === ColumnType.INTEGER || t === ColumnType.HEX) {
-            const seen = new Set<number>();
-            const scan = Math.min(store.loader.numRows, maxCategories * 4);
-            for (let i = 0; i < scan && items.length < maxCategories; i++) {
-                const v = col.getNumber(i);
-                if (!Number.isFinite(v) || seen.has(v)) continue;
-                seen.add(v);
-                items.push({ label: String(v), idx: modIndex(Math.trunc(v), palette.length) });
+                const { value, code } = pairs[i];
+                items.push({ label: `${value} (${code})`, idx: modIndex(code, palette.length) });
             }
         } else {
-            const seen = new Set<string>();
-            const scan = Math.min(store.loader.numRows, maxCategories * 4);
-            for (let i = 0; i < scan && items.length < maxCategories; i++) {
-                const s = col.getString(i);
-                if (seen.has(s)) continue;
-                seen.add(s);
-                let h = 0; for (let j = 0; j < s.length; j++) h = (h * 31 + s.charCodeAt(j)) | 0;
-                items.push({ label: s, idx: modIndex(h, palette.length) });
+            if (t === ColumnType.STRING) {
+                const seen = new Set<string>();
+                const scan = Math.min(store.loader.numRows, maxCategories * 4);
+                for (let i = 0; i < scan && items.length < maxCategories; i++) {
+                    const s = col.getString(i);
+                    if (seen.has(s)) continue;
+                    seen.add(s);
+                    let h = 0; for (let j = 0; j < s.length; j++) h = (h * 31 + s.charCodeAt(j)) | 0;
+                    items.push({ label: s, idx: modIndex(h, palette.length) });
+                }
+            } else {
+                const seen = new Set<number>();
+                const scan = Math.min(store.loader.numRows, maxCategories * 4);
+                for (let i = 0; i < scan && items.length < maxCategories; i++) {
+                    const v = col.getNumber(i);
+                    if (!Number.isFinite(v) || seen.has(v)) continue;
+                    seen.add(v);
+                    items.push({ label: String(v), idx: modIndex(Math.trunc(v), palette.length) });
+                }
             }
         }
 
