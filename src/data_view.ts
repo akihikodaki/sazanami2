@@ -295,6 +295,8 @@ export class DataView {
     private def_!: ViewDefinition;
     private numRows_ = 0;
     private xCol_!: ColumnInterface;
+    private xType_!: ColumnType;
+    private yType_!: ColumnType;
     private yCol_!: ColumnInterface;
     private colorCol_: ColumnInterface | null = null;
     private loaderRef_!: Loader;
@@ -381,6 +383,8 @@ export class DataView {
         }
         this.types_["__index__"] = columnInteger; // 便宜上、仮想インデックス列も整数として公開
 
+        this.xType_ = this.types_[spec.axisXField] ?? columnInteger;
+        this.yType_ = this.types_[spec.axisYField] ?? columnInteger;
 
         this.initialized_ = true; // 以降は読み取り専用
     }
@@ -392,6 +396,9 @@ export class DataView {
 
     getX(i: number): number { return this.xCol_.getNumber(i); }
     getY(i: number): number { return this.yCol_.getNumber(i); }
+
+    xToString(val: number) { return this.xType_.toString(val); }
+    yToString(val: number) { return this.yType_.toString(val); }
 
     // カラーインデックスの取得
     // colorField の値をパレットサイズより小さい整数に丸める

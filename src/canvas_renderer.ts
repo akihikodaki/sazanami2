@@ -286,7 +286,7 @@ class CanvasRenderer {
             canvasCtx.moveTo(this.MARGIN_LEFT_, y);
             canvasCtx.lineTo(width, y);
             canvasCtx.stroke();
-            canvasCtx.fillText(val.toString(), this.MARGIN_LEFT_ - 5, y);
+            canvasCtx.fillText(dataView.yToString(val), this.MARGIN_LEFT_ - 5, y);
         }
 
         // X-axis ticks
@@ -301,7 +301,7 @@ class CanvasRenderer {
             const x = this.MARGIN_LEFT_ + val * scaleXVal + (scaleXVal / 2) - offsetX;
             if (x < 0) continue;
             if (x > plotWidth) break;
-            canvasCtx.fillText(val.toString(), x, plotHeight + 3);
+            canvasCtx.fillText(dataView.xToString(val), x, plotHeight + 3);
         }
 
         // let elapsedTime = (new Date()).getTime() - startTime;
