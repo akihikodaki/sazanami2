@@ -276,9 +276,11 @@ class CanvasRenderer {
         const rawDataSpacingY = pixelMinSpacingY / scaleYVal;
         let tickSpacingY = this.niceNum_(rawDataSpacingY);
         tickSpacingY = tickSpacingY < 1 ? 1 : tickSpacingY; // 最小値を 1 に設定
-        for (let val = 0; val <= dataView.getMaxY(); val += tickSpacingY) {
+
+        for (let val = Math.ceil(Math.max(offsetY / scaleYVal, dataView.getMinY()) / tickSpacingY) * tickSpacingY;
+             val <= dataView.getMaxY();
+             val += tickSpacingY) {
             const y = val * scaleYVal - offsetY;
-            if (y < 0) continue;
             if (y > plotHeight) break;
             canvasCtx.strokeStyle = '#444';
             canvasCtx.lineWidth = 1;
