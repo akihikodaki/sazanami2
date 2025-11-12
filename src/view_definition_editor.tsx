@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Store, { ACTION, CHANGE } from "./store";
 import { ViewDefinition, DataView, inferViewDefinition, createDataView } from "./data_view";
-import { columnInteger, columnHex, columnString, ColumnType } from "./loader";
+import { columnDec, columnHex, columnString, ColumnType } from "./loader";
 import { Modal, Dropdown } from "react-bootstrap";
 import {
     BsPlus,
@@ -150,7 +150,7 @@ const typeBadgeText = ({ type, code }: ViewType) => {
     if (type === "INDEX") return "index";
     if (code) return "code";
     switch (type) {
-        case columnInteger: return "int";
+        case columnDec: return "dec";
         case columnHex: return "hex";
         default: return "col";
     }
@@ -785,7 +785,7 @@ function resolveTypeOfName(
     const headers: string[] = store.loader?.headers ?? [];
     const typesMap: { [name: string]: ColumnType } = store.loader?.types ?? {};
     const code = store.loader.columnFromName(name).codeToValueList != null;
-    if (headers.includes(name)) return { type: typesMap[name] ?? columnInteger, code }; // 既定は数値扱い
+    if (headers.includes(name)) return { type: typesMap[name] ?? columnDec, code }; // 既定は数値扱い
     return null;
 }
 

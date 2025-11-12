@@ -1,7 +1,7 @@
 import { FileLineReader, FileLineReaderOptions } from "./file_line_reader";
 import { inferViewDefinition, ViewDefinition, DataView, isEqualViewDefinition, createDataView } from "./data_view";
 
-export const columnInteger = {
+export const columnDec = {
     toString(value: number | string) {
         return value.toString();
     }
@@ -19,7 +19,7 @@ export const columnString = {
     }
 }
 
-type ColumnType = typeof columnInteger | typeof columnHex | typeof columnString;
+type ColumnType = typeof columnDec | typeof columnHex | typeof columnString;
 
 class ColumnStats {
     min: number = Infinity;
@@ -59,7 +59,7 @@ class ColumnBuffer implements ColumnInterface {
     constructor() {
         this.buffer = new Int32Array(ColumnBuffer.INITIAL_CAPACITY);
         this.length = 0;
-        this.type = columnInteger; // 初期は整数列
+        this.type = columnDec; // 初期は整数列
         this.stringToCodeDict = {};
         this.intToCodeDict = {};
         this.codeToValueList = null;
@@ -199,7 +199,7 @@ class Loader {
         values.forEach((header, i) => {
             this.headerIndex_[header] = i;
             this.rawBuffer_[header] = [];
-            this.detection_[header] = columnInteger; // 初期は整数列
+            this.detection_[header] = columnDec; // 初期は整数列
             this.rawStringMap_[header] = {};
         });
     }
@@ -255,14 +255,14 @@ class Loader {
     private detectType_(header: string, value: string): void {
         this.rawBuffer_[header].push(value);
         const isHex = /^(?:0[xX])?[0-9A-Fa-f]+$/.test(value);
-        const isInt = /^-?\d+$/.test(value);
+        const isDec = /^-?\d+$/.test(value);
 
         // 16進数が現れたら HEX に変更
-        if (this.detection_[header] === columnInteger && isHex && !isInt) {
+        if (this.detection_[header] === columnDec && isHex && !isDec) {
             this.detection_[header] = columnHex;
         }
         // 数値じゃ無いものが1度でも現れたら STRING に変更
-        if (this.detection_[header] !== columnString && !isHex && !isInt) {
+        if (this.detection_[header] !== columnString && !isHex && !isDec) {
             this.detection_[header] = columnString;
         }
         // 文字列の出現パターン数をカウントし，finalizeTypes_ で判定
@@ -280,7 +280,7 @@ class Loader {
             }
 
             let isOrgHex = this.detection_[header] === columnHex;
-            if (this.detection_[header] === columnInteger || this.detection_[header] === columnHex) {
+            if (this.detection_[header] === columnDec || this.detection_[header] === columnHex) {
                 // 整数列の場合，出現パターン数が少なければ INT_CODE に変更
                 const uniqueCount = new Set(this.rawBuffer_[header]).size;
                 code = uniqueCount < 32;

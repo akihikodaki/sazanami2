@@ -1,5 +1,5 @@
 // data_view.ts
-import { Loader, ColumnBuffer, columnInteger, ColumnType, ColumnInterface  } from "./loader";
+import { Loader, ColumnBuffer, columnDec, ColumnType, ColumnInterface  } from "./loader";
 import { buildPaletteByName, inferColorMapName } from "./color_map";
 
 // 軸と色の仕様
@@ -379,12 +379,12 @@ export class DataView {
         // types 構築：実列 + 仮想列 + __index__
         this.types_ = { ...loader.types };
         for (const vName of this.registry_.list()) {
-            this.types_[vName] = columnInteger; // 仮想列は数式で得られる数値列として扱う
+            this.types_[vName] = columnDec; // 仮想列は数式で得られる数値列として扱う
         }
-        this.types_["__index__"] = columnInteger; // 便宜上、仮想インデックス列も整数として公開
+        this.types_["__index__"] = columnDec; // 便宜上、仮想インデックス列も整数として公開
 
-        this.xType_ = this.types_[spec.axisXField] ?? columnInteger;
-        this.yType_ = this.types_[spec.axisYField] ?? columnInteger;
+        this.xType_ = this.types_[spec.axisXField] ?? columnDec;
+        this.yType_ = this.types_[spec.axisYField] ?? columnDec;
 
         this.initialized_ = true; // 以降は読み取り専用
     }
