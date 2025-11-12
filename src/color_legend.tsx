@@ -90,19 +90,20 @@ const ColorLegend: React.FC<Props> = ({
             };
         }
 
+        const types = dv.types;
+        const t = types[colorField];
+
         if (dv.isColorContinuous()) {
             return {
                 ready: true as const,
                 mode: "continuous" as const,
                 title: `Legend · ${colorField}`,
                 palette,
-                min: dv.getMinColor(),
-                max: dv.getMaxColor()
+                min: t.toString(dv.getMinColor()),
+                max: t.toString(dv.getMaxColor())
             };
         }
 
-        const types = dv.types;
-        const t = types[colorField];
         const col = dv.columnFromName(colorField);
 
         type Item = { label: string; idx: number };
@@ -133,7 +134,7 @@ const ColorLegend: React.FC<Props> = ({
                     const v = col.getNumber(i);
                     if (!Number.isFinite(v) || seen.has(v)) continue;
                     seen.add(v);
-                    items.push({ label: String(v), idx: modIndex(Math.trunc(v), palette.length) });
+                    items.push({ label: t.toString(v), idx: modIndex(Math.trunc(v), palette.length) });
                 }
             }
         }
@@ -225,8 +226,8 @@ const ColorLegend: React.FC<Props> = ({
                     }}
                 />
                 <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, width: direction === "horizontal" ? 240 : 160 }}>
-                    <span>{String(view.min)}</span>
-                    <span>{String(view.max)}</span>
+                    <span>{view.min}</span>
+                    <span>{view.max}</span>
                 </div>
             </div>
         );
