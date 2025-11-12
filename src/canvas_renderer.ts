@@ -365,7 +365,7 @@ class CanvasRenderer {
     }
 
     /**
-     * データ全体（X: 0..maxX-1, Y: minY..maxY）がプロット領域に収まるように
+     * データ全体（X: minX..maxX, Y: minY..maxY）がプロット領域に収まるように
      * scaleXLog / scaleYLog を設定し、オフセットもリセットする。
      */
     fitScaleToData(dataView: DataView | null, renderCtx: RendererContext, paddingRatio = 1.0): RendererContext {
@@ -375,12 +375,13 @@ class CanvasRenderer {
         const plotWidth  = Math.max(1, width  - this.MARGIN_LEFT_);
         const plotHeight = Math.max(1, height - this.MARGIN_BOTTOM_);
 
-        const maxX = Math.max(0, dataView.getMaxX());
-        const maxY = Math.max(0, dataView.getMaxY());
-        const minY = Math.max(0, dataView.getMinY ? dataView.getMinY() : 0);
+        const maxX = dataView.getMaxX();
+        const minX = dataView.getMinX();
+        const maxY = dataView.getMaxY();
+        const minY = dataView.getMinY ? dataView.getMinY() : 0;
 
-        // X方向は 0..maxX-1 のセル幅
-        const dataPixelWidth  = Math.max(1, maxX) * paddingRatio;
+        // X方向は minX..maxX のセル幅
+        const dataPixelWidth  = Math.max(1, maxX - minX + 1) * paddingRatio;
 
         // Y方向は minY..maxY の範囲を収める
         const baseScaleY = 1;
@@ -406,15 +407,12 @@ class CanvasRenderer {
         const nextOffsetY = minY * baseScaleY * Math.exp(nextScaleYLog);
 
         // 横方向オフセット
-        let nextOffsetX: number;
+        let nextOffsetX = minX * Math.exp(nextScaleXLog);
         if (clamped) {
             // 実際のデータ幅（px換算後）
             const usedWidth = dataPixelWidth * Math.exp(nextScaleXLog);
             // プロット領域中央に配置
-            nextOffsetX = -(plotWidth - usedWidth) / 2;
-        } else {
-            // フィットの場合は左寄せ
-            nextOffsetX = 0;
+            nextOffsetX -= (plotWidth - usedWidth) / 2;
         }
 
         return {
