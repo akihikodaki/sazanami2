@@ -298,10 +298,12 @@ class CanvasRenderer {
         const rawDataSpacingX = pixelMinSpacingX / scaleXVal;
         let tickSpacingX = this.niceNum_(rawDataSpacingX);
         tickSpacingX = tickSpacingX < 1 ? 1 : tickSpacingX; // 最小値を 1 に設定
-        for (let i = 0; i < dataView.getMaxX(); i += tickSpacingX) {
+        const tickOffsetX = offsetX - this.MARGIN_LEFT_ - (scaleXVal / 2);
+        for (let i = Math.ceil(Math.max(tickOffsetX / scaleXVal, dataView.getMinX()) / tickSpacingX) * tickSpacingX;
+             i < dataView.getMaxX();
+             i += tickSpacingX) {
             const val = i;
-            const x = this.MARGIN_LEFT_ + val * scaleXVal + (scaleXVal / 2) - offsetX;
-            if (x < 0) continue;
+            const x = val * scaleXVal - tickOffsetX;
             if (x > plotWidth) break;
             canvasCtx.fillText(val.toString(), x, plotHeight + 3);
         }
