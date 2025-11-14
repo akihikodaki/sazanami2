@@ -210,7 +210,7 @@ class CanvasRenderer {
 
         // 描画まびき
         // X 方向の密度に応じても間引き量をかえる
-        const avgNumPointX = (dataView.getEndIdx(Infinity,Infinity) - dataView.getStartIdx(-Infinity, -Infinity)) / (dataView.getMaxY() - dataView.getMinY());
+        const avgNumPointX = (dataView.getEndIdx(Infinity,Infinity) - dataView.getStartIdx(-Infinity, -Infinity) + 1) / (dataView.getMaxY() - dataView.getMinY() + 1);
         let step = Math.max(1, Math.floor(ratioY * avgNumPointX / 4 / 32));
 
         if (endIdx - startIdx < 100000) step = 1; // 少ない場合は間引かない
