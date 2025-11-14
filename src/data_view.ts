@@ -74,6 +74,13 @@ class IndexColumn implements ColumnInterface {
 
 }
 
+class EmptyColumn implements ColumnInterface {
+    stat = { min: 0, max: 0, deviationFromMax: 0 };
+    getNumber(_: number) { return 0; }
+    getString(i: number) { return this.getNumber(i).toString(); }
+    codeToValueList = null;
+}
+
 // 仮想列で使用する式エンジン
 class ExpressionProjector {
     private expr_ = "";
@@ -354,7 +361,7 @@ export class DataView {
             if (vcol) return vcol;
             let col = loader.columnFromName(name);
             if (!col) {
-                col = new IndexColumn(this.numRows_); // フォールバックとして行インデクス列
+                col = new EmptyColumn();
             }
             return col;
         };
