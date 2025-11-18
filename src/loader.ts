@@ -262,7 +262,9 @@ class Loader {
             this.detection_[header] = columnHex;
         }
         // 数値じゃ無いものが1度でも現れたら STRING に変更
-        if (this.detection_[header] !== columnString && !isHex && !isDec) {
+        if (this.detection_[header] !== columnString &&
+            !((isHex || isDec) &&
+              parseInt(value, this.detection_[header] === columnDec ? 10 : 16) <= 0x7fffffff)) {
             this.detection_[header] = columnString;
         }
         // 文字列の出現パターン数をカウントし，finalizeTypes_ で判定
